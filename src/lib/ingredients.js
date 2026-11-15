@@ -158,3 +158,35 @@ export function groceryFromLine(line) {
   const name = p.text.replace(/\(.*?\)/g, '').replace(/^of\s+/i, '').split(',')[0].trim()
   return { qty, name: name || p.text }
 }
+
+// --- typed-in amounts ---------------------------------------------------------------------
+// A portion is often not one of the round numbers on a stepper (1.3 of a recipe's servings,
+// say), so the number is typable. These two are the whole of that arithmetic, kept pure.
+
+export const clampQty = (n, { min = 0.05, max = 999 } = {}) =>
+  Math.min(max, Math.max(min, Math.round(n * 1000) / 1000))
+
+/** Read a typed amount. Returns null for anything that is not a usable positive number. */
+export function parseQty(text, bounds) {
+  const n = parseFloat(String(text ?? '').replace(',', '.').trim())
+  if (!isFinite(n) || n <= 0) return null
+  return clampQty(n, bounds)
+}
+
+/**
+ * One press of +/-. On a value that sits on the ladder, move along it; off the ladder, move to
+ * the next rung in that direction; with no ladder at all, step by a sensible grain.
+ */
+export function stepQty(value, dir, steps, bounds) {
+  const v = Number(value) || 0
+  if (steps && steps.length) {
+    const i = steps.findIndex((s) => Math.abs(s - v) < 1e-9)
+    if (i >= 0) { const next = steps[i + dir]; if (next != null) return clampQty(next, bounds) }
+    else {
+      const near = dir > 0 ? steps.find((s) => s > v + 1e-9) : [...steps].reverse().find((s) => s < v - 1e-9)
+      if (near != null) return clampQty(near, bounds)
+    }
+  }
+  const grain = v < 1 ? 0.25 : v < 4 ? 0.5 : 1
+  return clampQty(v + dir * grain, bounds)
+}

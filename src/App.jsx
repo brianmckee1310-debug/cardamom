@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AppCtx, Icon, IconBtn, useWide } from './ui/bits.jsx'
 import { useStore, clearError, restoreItem, useSettings } from './store.js'
 import Recipes from './ui/Recipes.jsx'
@@ -9,14 +9,22 @@ import Grocery from './ui/Grocery.jsx'
 import Pantry from './ui/Pantry.jsx'
 import Planner from './ui/Planner.jsx'
 import { Menus, MenuView } from './ui/Menus.jsx'
-import ImportSheet from './ui/Import.jsx'
-import More, { Household, Roadmap, Categories } from './ui/More.jsx'
-import Barcode from './ui/Barcode.jsx'
+import FoodLog from './ui/FoodLog.jsx'
+import LogAdd, { LogEntry, LogTargets } from './ui/LogSheets.jsx'
 import { RecipePicker, AddToGroceries, AddToPlan, ItemEdit, AddToMenu } from './ui/Sheets.jsx'
 import { firstUrl } from './lib/importers.js'
 
-const TABS = [['recipes', 'Recipes', 'book'], ['groceries', 'Groceries', 'cart'], ['planner', 'Planner', 'calendar'], ['pantry', 'Pantry', 'jar'], ['more', 'More', 'more']]
-const VIEWS = { recipe: RecipeView, edit: RecipeEdit, cook: CookMode, import: ImportSheet, menus: Menus, menu: MenuView, household: Household, roadmap: Roadmap, categories: Categories, barcode: Barcode, pick: RecipePicker, addToGroceries: AddToGroceries, addToPlan: AddToPlan, itemEdit: ItemEdit, addToMenu: AddToMenu }
+// Split out of the first load: Import pulls in the zip reader, More pulls in the Supabase
+// client, Barcode pulls in the camera decoder. None of them is needed to show the library.
+const ImportSheet = lazy(() => import('./ui/Import.jsx'))
+const Barcode = lazy(() => import('./ui/Barcode.jsx'))
+const More = lazy(() => import('./ui/More.jsx'))
+const named = (key) => lazy(() => import('./ui/More.jsx').then((m) => ({ default: m[key] })))
+const Household = named('Household'), Roadmap = named('Roadmap'), Categories = named('Categories')
+
+const TABS = [['recipes', 'Recipes', 'book'], ['log', 'Log', 'bowl'], ['groceries', 'Groceries', 'cart'], ['planner', 'Planner', 'calendar'], ['pantry', 'Pantry', 'jar'], ['more', 'More', 'more']]
+const VIEWS = { recipe: RecipeView, edit: RecipeEdit, cook: CookMode, import: ImportSheet, menus: Menus, menu: MenuView, household: Household, roadmap: Roadmap, categories: Categories, barcode: Barcode, pick: RecipePicker, addToGroceries: AddToGroceries, addToPlan: AddToPlan, itemEdit: ItemEdit, addToMenu: AddToMenu, logAdd: LogAdd, logEntry: LogEntry, logTargets: LogTargets }
+const TAB_COMPONENTS = { recipes: Recipes, log: FoodLog, groceries: Grocery, planner: Planner, pantry: Pantry, more: More }
 const fmt = (s) => { s = Math.max(0, Math.ceil(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0') }
 
 function beep() {
@@ -77,8 +85,10 @@ export default function App() {
   useEffect(() => { document.documentElement.dataset.theme = settings.theme || 'auto' }, [settings.theme])
 
   const ctx = useMemo(() => ({ push, back, replace, toast, removed, startTimer, setTab, wide }), [push, back, replace, toast, removed, startTimer, wide])
+  // The pane is held by identity so pushing an overlay, firing a toast or ticking a timer does
+  // not re-render a library of several hundred rows underneath it.
+  const pane = useMemo(() => { const T = TAB_COMPONENTS[tab]; return <T /> }, [tab])
   if (!store.ready) return <div className="boot"><span className="spinner" /></div>
-  const Tab = { recipes: Recipes, groceries: Grocery, planner: Planner, pantry: Pantry, more: More }[tab]
   return (
     <AppCtx.Provider value={ctx}>
       <div className={`app ${wide ? 'wide' : ''}`}>
@@ -88,7 +98,7 @@ export default function App() {
             <button key={id} className={tab === id ? 'on' : ''} onClick={() => { setTab(id); if (stack.length) { history.go(-stack.length); setStack([]) } }} aria-current={tab === id ? 'page' : undefined}><Icon name={icon} /><span>{label}</span></button>
           ))}
         </nav>
-        <main className="tabpane" key={tab}><Tab /></main>
+        <main className="tabpane" key={tab}><Suspense fallback={<div className="boot"><span className="spinner" /></div>}>{pane}</Suspense></main>
         {timers.length > 0 && (
           <div className="timers">
             {timers.map((t) => (
@@ -99,7 +109,7 @@ export default function App() {
             ))}
           </div>
         )}
-        {stack.map((s) => { const V = VIEWS[s.type]; return V ? <V key={s.key} {...s.props} /> : null })}
+        <Suspense fallback={null}>{stack.map((s) => { const V = VIEWS[s.type]; return V ? <V key={s.key} {...s.props} /> : null })}</Suspense>
         <div className="toasts" aria-live="polite">
           {store.error && <div className="toast err"><span>{store.error}</span><button onClick={clearError}>OK</button></div>}
           {toasts.map((t) => <div className="toast" key={t.id}><span>{t.text}</span>{t.undo && <button onClick={() => { t.undo(); setToasts((x) => x.filter((y) => y.id !== t.id)) }}>Undo</button>}</div>)}

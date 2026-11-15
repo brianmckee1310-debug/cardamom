@@ -1,4 +1,6 @@
 // Google Gemini calls (free key the user pastes in Settings). Every function takes the key/model as arguments.
+import { NUTRIENTS, cleanNut, nutText, caloriesFromMacros } from './nutrition.js'
+
 const API = 'https://generativelanguage.googleapis.com/v1beta/models/'
 export const DEFAULT_MODEL = 'gemini-flash-latest'
 
@@ -27,6 +29,8 @@ async function call({ key, model }, body, fetchFn = fetch) {
     const msg = json.error?.message || `Gemini error ${res.status}`
     if (res.status === 429) throw new Error('Gemini free limit reached for now. Try again in a minute.')
     if (res.status === 400 && /API key/i.test(msg)) throw new Error('That Gemini key was not accepted. Check it in Settings.')
+    if (res.status === 503 || /overload|unavailable|high demand|try again later/i.test(msg)) throw new Error('Google is busy right now, not a problem with your key. Try again in a moment.')
+    if (res.status >= 500) throw new Error('Google had a server error. Try again in a moment.')
     throw new Error(msg)
   }
   const text = (json.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('')
@@ -75,21 +79,53 @@ export async function recipeFromUrl(cfg, url, fetchFn) {
   return draftFromAi(parseJsonLoose(out))
 }
 
+const NUT_PROPS = Object.fromEntries(NUTRIENTS.map((n) => [n.k, { type: 'NUMBER', description: n.unit ? `${n.label} in ${n.unit}` : n.label }]))
+const NOTABLE = { type: 'OBJECT', properties: { t: { type: 'STRING', description: 'good or caution' }, label: { type: 'STRING', description: 'the compound or the risk, two or three words' }, text: { type: 'STRING', description: 'one or two sentences, hedged, no health claims' } }, required: ['t', 'label', 'text'] }
 const NUTRITION_SCHEMA = {
   type: 'OBJECT',
-  properties: Object.fromEntries(['calories', 'fat_g', 'saturated_fat_g', 'carbohydrates_g', 'fiber_g', 'sugar_g', 'protein_g', 'sodium_mg', 'cholesterol_mg'].map((k) => [k, { type: 'NUMBER' }]).concat([['servings_assumed', { type: 'NUMBER' }], ['caveat', { type: 'STRING', description: 'short note on the biggest uncertainty, or empty' }]])),
-  required: ['calories', 'fat_g', 'carbohydrates_g', 'protein_g', 'servings_assumed'],
+  properties: { ...NUT_PROPS, servings_assumed: { type: 'NUMBER' }, caveat: { type: 'STRING', description: 'short note on the biggest uncertainty, or empty' }, notables: { type: 'ARRAY', items: NOTABLE } },
+  required: ['calories', 'protein_g', 'carbohydrates_g', 'fat_g', 'servings_assumed'],
 }
+const NUT_RULES = `Use standard food composition data. Omit any nutrient you cannot estimate with reasonable confidence — an omitted value is far better than a guess, and this applies especially to vitamins and minerals, which you should give only where an ingredient clearly supplies them. Count optional items as half.
+For notables, list up to 6 genuinely characteristic things and skip anything that would be true of most food: beneficial compounds (name the compound, e.g. sulforaphane, beta-glucans) and cautions (mercury, allergens, pregnancy, drug interactions, something that must be cooked). Hedge honestly and never claim a food treats or prevents anything.`
+
+/** Kept for the recipe Nutrition text field, in a shape Paprika and parseNutText both read. */
 export function formatNutrition(n) {
-  const r = (v) => (v == null ? null : Math.round(v))
-  const rows = [['Calories', r(n.calories), ''], ['Fat', r(n.fat_g), ' g'], ['Saturated Fat', r(n.saturated_fat_g), ' g'], ['Carbohydrates', r(n.carbohydrates_g), ' g'], ['Fiber', r(n.fiber_g), ' g'], ['Sugar', r(n.sugar_g), ' g'], ['Protein', r(n.protein_g), ' g'], ['Sodium', r(n.sodium_mg), ' mg'], ['Cholesterol', r(n.cholesterol_mg), ' mg']]
-  const lines = [`Per serving (estimated, ${n.servings_assumed} servings):`, ...rows.filter((x) => x[1] != null).map(([k, v, u]) => `${k}: ${v}${u}`)]
-  if (n.caveat) lines.push(n.caveat)
-  return lines.join('\n')
+  const text = nutText(cleanNut(n), n?.servings_assumed)
+  return n?.caveat ? `${text}\n${n.caveat}` : text
 }
+
+const aiNotables = (o) => (Array.isArray(o?.notables) ? o.notables : []).map((x) => ({ t: x?.t === 'caution' ? 'caution' : 'good', label: String(x?.label || '').trim(), text: String(x?.text || '').trim() })).filter((x) => x.label && x.text)
+
+/**
+ * Estimate a recipe's nutrition per serving. Returns the numbers, the text for the recipe's
+ * Nutrition field, and the notables, so one call feeds both the log and the recipe page.
+ */
 export async function analyseNutrition(cfg, recipe, fetchFn) {
-  const out = await call(cfg, { contents: [{ parts: [{ text: `Estimate nutrition PER SERVING for this recipe using standard food composition data. Servings stated: "${recipe.servings || 'not stated'}" (if not stated, pick a sensible number and report it). Count optional items as half. \n\nRECIPE: ${recipe.name}\nINGREDIENTS:\n${recipe.ingredients}` }] }], generationConfig: json(NUTRITION_SCHEMA) }, fetchFn)
-  return formatNutrition(parseJsonLoose(out))
+  const out = await call(cfg, { contents: [{ parts: [{ text: `Estimate nutrition PER SERVING for this recipe. Servings stated: "${recipe.servings || 'not stated'}" (if not stated, pick a sensible number and report it in servings_assumed).\n${NUT_RULES}\n\nRECIPE: ${recipe.name}\nINGREDIENTS:\n${recipe.ingredients}` }] }], generationConfig: json(NUTRITION_SCHEMA) }, fetchFn)
+  const o = parseJsonLoose(out)
+  const values = cleanNut(o)
+  if (values.calories == null) { const c = caloriesFromMacros(values); if (c > 0) values.calories = c }
+  return { values, text: formatNutrition(o), notables: aiNotables(o), servings: Number(o.servings_assumed) || null, caveat: o.caveat || '' }
+}
+
+const FOOD_SCHEMA = {
+  type: 'OBJECT',
+  properties: { ...NUT_PROPS, name: { type: 'STRING', description: 'short name for what was eaten' }, portion: { type: 'STRING', description: 'the amount these numbers are for, e.g. "2 eggs and 1 slice toast"' }, caveat: { type: 'STRING' }, notables: { type: 'ARRAY', items: NOTABLE } },
+  required: ['name', 'portion', 'calories', 'protein_g', 'carbohydrates_g', 'fat_g'],
+}
+
+/**
+ * "two scrambled eggs and a slice of buttered toast" -> one log entry. The numbers are for the
+ * whole amount described, so the quantity stepper in the app scales from 1.
+ */
+export async function foodFromDescription(cfg, text, fetchFn) {
+  const out = await call(cfg, { contents: [{ parts: [{ text: `Someone is logging what they ate: "${text.slice(0, 1200)}"\nEstimate the nutrition of EXACTLY that amount in total (not per 100 g, not per serving). If the amount is vague, assume an ordinary portion and say so in portion.\n${NUT_RULES}` }] }], generationConfig: json(FOOD_SCHEMA) }, fetchFn)
+  const o = parseJsonLoose(out)
+  const values = cleanNut(o)
+  if (values.calories == null) { const c = caloriesFromMacros(values); if (c > 0) values.calories = c }
+  if (!Object.keys(values).length) throw new Error('Could not work out what that was.')
+  return { name: String(o.name || text).slice(0, 80), portion: String(o.portion || '').slice(0, 80), per: values, notables: aiNotables(o), caveat: o.caveat || '' }
 }
 
 export async function suggestCategories(cfg, recipe, existing, fetchFn) {

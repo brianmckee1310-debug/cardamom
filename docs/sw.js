@@ -1,5 +1,5 @@
 // Offline shell: pages load network-first, built files cache-first.
-const CACHE = 'cardamom-v1'
+const CACHE = 'cardamom-v3'
 self.addEventListener('install', (e) => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './icon.svg', './manifest.webmanifest']))) })
 self.addEventListener('activate', (e) => e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())))
 self.addEventListener('fetch', (e) => {

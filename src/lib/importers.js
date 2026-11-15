@@ -2,6 +2,7 @@
 import { recipeFromHtml, pageMeta, pageText } from './webRecipe.js'
 import { recipeFromText as localFromText } from './textRecipe.js'
 import * as ai from './gemini.js'
+import { fromOff, gramsFromServing } from './nutrition.js'
 import { sb, session, functionsUrl } from './sync.js'
 import { getSettings } from '../store.js'
 
@@ -67,12 +68,28 @@ export async function importFromText(text) {
 }
 export const importFromImages = async (blobs) => ({ draft: await ai.recipeFromImages(aiCfg(), blobs), via: 'Scanned by AI' })
 
+const OFF_FIELDS = 'product_name,brands,quantity,categories_tags,serving_size,nutriments,ingredients_text,allergens_tags'
+
+/**
+ * Open Food Facts lookup. As well as the name, this brings back the label's own nutrition —
+ * real measured numbers rather than an estimate, which is why a scanned product is the most
+ * accurate thing you can put in the food log.
+ */
 export async function lookupBarcode(code) {
-  const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,brands,quantity,categories_tags`)
+  const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=${OFF_FIELDS}`)
   if (!res.ok) throw new Error('Lookup failed')
   const j = await res.json()
   if (j.status !== 1 || !j.product) return null
   const p = j.product
   const name = [p.brands?.split(',')[0], p.product_name].filter(Boolean).join(' ').trim()
-  return name ? { name, qty: p.quantity || '' } : null
+  if (!name) return null
+  const servingG = gramsFromServing(p.serving_size)
+  return {
+    name, qty: p.quantity || '',
+    serving: p.serving_size || '', servingG,
+    per100: fromOff(p.nutriments, 100),
+    perServing: servingG ? fromOff(p.nutriments, servingG) : null,
+    ingredients: p.ingredients_text || '',
+    allergens: (p.allergens_tags || []).map((a) => a.replace(/^..:/, '')),
+  }
 }

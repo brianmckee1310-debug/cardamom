@@ -1,27 +1,152 @@
 # Cardamom roadmap
 
-Personal Paprika-style recipe manager for Brian and his wife. Updated 2026-11-13, version 1.0.0.
+Personal Paprika-style recipe manager for Brian and his wife. Updated 2026-11-15, version 1.3.0.
+
+Live at https://brianmckee1310-debug.github.io/cardamom/
+Code at https://github.com/brianmckee1310-debug/cardamom (Pages serves `main` / `/docs`)
+Source on disk at `C:\Users\brian\Claude\Projects\Cardamom`
 
 | # | Phase | Status | Model and effort |
 |---|-------|--------|------------------|
 | 1 | Recipe library and Paprika import/export | Done | |
 | 2 | Kitchen tools: groceries, pantry, planner, menus, cook mode, timers, voice | Done | |
 | 3 | Smart importing: links, share, clipboard, photo scan, social, barcode, nutrition, category suggestions | Done (built; AI parts not yet tried with a real key) | |
-| 4 | Household sync and live calendar feed in the Cairn Supabase project; permanent web address | Next | Opus 5, low effort |
-| 5 | Polish from real kitchen use (month view, multiple grocery lists, reordering) | Later | Opus 5, medium effort |
-| 6 | Alexa skill, only if voice mode is not enough | Later | Opus 5.5, high effort |
+| 4 | Household sync, live calendar feed, permanent web address | Done | |
+| 5 | Daily food log | Done | |
+| 6 | Polish and the first shared build | Done | |
+| 7 | What real kitchen use turns up | Next | Opus 5, medium effort |
+| 8 | Hands-free beyond cook mode | Later | Opus 5, medium effort |
 
-## Phase 4 checklist
-- Run `supabase/schema.sql` in the Cairn project (all tables are prefixed `cardamom_`).
-- Deploy edge functions `cardamom-ics` (public, no JWT check) and `cardamom-fetch`.
-- Build with `VITE_SB_URL` and `VITE_SB_KEY`, deploy, create both accounts, create household on Brian's phone, join on the other.
-- Needs: the Supabase connector working in the session, and an empty GitHub repo named `cardamom` (or keep using Netlify).
+## Phase 6, done on 2026-11-15 — version 1.3.0
 
-## Checked on 2026-11-13
-- All 473 recipes and 537 photos from the real Paprika export import in about 9 seconds in Chrome.
-- 17 unit tests and a 48-step browser walk-through pass at phone and laptop sizes.
+The first build someone other than Brian uses, so this pass was about the things you notice
+in the hand rather than new features.
+
+- **Any amount can be typed.** The quantity on a log entry is now an input as well as a pair
+  of +/- buttons, so 1.3 portions is simply typed in. The same control sits in the scale sheet
+  on a recipe, where you can type the number of servings you actually want and every
+  ingredient line follows. The buttons still walk a ladder of common amounts when you are
+  standing on one, and step to the next sensible rung when you are not. Junk input and
+  out-of-range numbers fall back to the last good value instead of poisoning a total.
+- **Opening a recipe is quicker, and browsing the library is much quicker.** Measured, not
+  guessed — see below.
+- **Warm stone and taupe, with olive used sparingly.** Cream and warm grey-brown carry the
+  app; olive is kept for the active tab, primary buttons, progress bars and the like. Serif
+  headings stayed. Every text pair was checked against its background: everything that
+  carries meaning clears 4.5:1 in both light and dark.
+- **Motion where things used to snap.** Tab changes, pages, sheets, check-offs, toggles,
+  stepper changes and list items all move now: opacity plus 7–18px of travel, 180–280ms,
+  ease-out, nothing that overshoots. All of it sits under the `prefers-reduced-motion` rule,
+  which now also cancels the staggered delays.
+- **A kinder first run.** An empty library offers joining the household first, since that is
+  what the second person in the house actually needs. Sign-in explains what to do if you have
+  no account yet, and the service's own error wording ("Invalid login credentials") is
+  translated into something a person can act on. Storage failures now say what to do about it
+  rather than printing the browser's message.
+
+### The recipe-opening fix
+
+Profiled against a seeded 473-recipe library with a photo on every recipe, at 384px with the
+CPU throttled 4x to stand in for a phone. The cause was not the recipe page: it was that a
+62px list thumbnail was decoding the same 1600px, ~425 KB photo as the hero. Browsing the
+library left hundreds of full-size bitmaps decoded, and everything after that — including
+opening a recipe — ran in the shadow of it.
+
+What changed: a small thumbnail is made once per photo and stored beside it; full-size object
+URLs are capped and reused; the one-time thumbnail backfill runs two at a time, newest first,
+and stands aside whenever a full photo is being read; the recipe list no longer re-renders
+when an overlay opens; the recipe page's ingredient, step and notable parsing is memoised; the
+store only invalidates the derived lists a save actually touched; the hero photo starts
+loading on the tap rather than after the page mounts; and Supabase, the zip reader and the
+barcode decoder moved out of the first load.
+
+Steady state, same library and settings, median of seven opens from deep in a scrolled list:
+
+| | before | after |
+|---|---|---|
+| Recipe page on screen | 190 ms | 157 ms |
+| Ingredients readable | 287 ms | 252 ms |
+| Hero photo painted | 298 ms | 271 ms |
+| Main thread blocked while opening | 6 ms | 0 ms |
+| Blocking time scrolling the library | 287 ms | 67 ms |
+| Long tasks scrolling the library | 15 | 6 |
+| Decoded image data held after a scroll | 731 megapixels | 12 megapixels |
+| JavaScript on first load | 538 KB (163 KB gzipped) | 259 KB (86 KB gzipped) |
+
+The honest reading: on this emulated phone the open itself is 10–17% quicker, which is real
+but modest. The large numbers are the scroll and the image memory, and those are the ones
+likely to matter most on an actual Galaxy S23 — 731 megapixels of decoded photo is past the
+point where a phone starts throwing bitmaps away and decoding them again, which is exactly
+what "it took a while" feels like. First load is also half what it was.
+
+### Also fixed in this pass
+- Sync credentials were missing from the deployed build, so a fresh install said "sync is not
+  switched on yet" and a new person could not join the household without pasting a database
+  URL and key by hand. The project's public client credentials are baked back into the build.
+- "Portion: one of 2 servings servings" — the word was doubled whenever a recipe's servings
+  field already said "servings".
+- The sticky action button at the foot of a sheet did not hide what scrolled under it.
+
+## Phase 7 — what real kitchen use turns up. Next. Opus 5, medium effort.
+Deferred from the old phase 6, to be reconsidered after a few weeks of actually cooking from it:
+month view on the planner, more than one grocery list, drag to reorder, and a week and month
+view of the log.
+
+## Phase 8 — hands-free beyond cook mode. Later. Opus 5, medium effort.
+
+This replaces the Alexa skill, which is dropped. A custom Alexa skill (or a Google Assistant
+action) needs a developer account and a server to host the endpoint, which breaks the rule
+that everything stays free. These three get most of the same result with what is already here
+— the Web Speech API the cook mode voice control already uses, and the phone itself.
+
+1. **Listening from any screen.** Lift the cook-mode voice listener up to the whole app, with
+   a mic in the title bar and commands for the things you would want your hands free for:
+   "add butter to the groceries", "log a bowl of oatmeal", "start a 12 minute timer", "open
+   the short ribs". Free, no account, runs on the phone. The largest of the three.
+   *Opus 5, medium effort.*
+2. **Landing straight in hands-free.** Manifest shortcuts and deep links (`?cook=<recipe>`,
+   `?add=groceries`, `?log=1`), so long-pressing the icon, a home-screen shortcut, or telling
+   the phone to open Cardamom drops you on the right screen with the mic already live. No
+   server, nothing to sign up for, and it is what makes option 1 worth having mid-recipe.
+   *Opus 5, low effort.*
+3. **Dictation into the fields that matter.** A mic beside the describe-what-you-ate box, the
+   grocery add box and the recipe notes, so a sticky-handed entry is spoken rather than typed.
+   Smallest of the three and useful on its own. *Opus 5, low effort.*
+
+Worth scoping 2 and 3 together first: they are cheap and they are most of the day-to-day
+benefit. 1 is the one to think about properly.
+
+## Checked on 2026-11-15
+- 60 unit tests pass (51 from before, plus 9 new covering typed amounts, the stepper ladder,
+  bounds and junk input, scaling a line by a typed factor, and the portion wording).
+- A scripted browser walk at 384px in light and dark and at 1280px: library, recipe, scale
+  sheet, typing 1.3, log, log add, the amount control, groceries, planner, pantry and more.
+  No console errors, nothing overflowing its box, no horizontal scroll on any screen.
+  Screenshots were looked at by eye in both themes.
+- A brand-new install with nothing in it was walked separately for the first-run screens.
+- Typing 1.3 was verified end to end: the recipe header reads "1.3 servings" and the log
+  preview reads 546 calories against a 420-calorie serving.
 
 ## Not yet verified
-- Anything that needs the Gemini key, a real camera or microphone, or a real phone install.
-- Sync code and database script (written, never run against the database).
-- Public page-fetch services used for link import before sync is on.
+- Anything needing the Gemini key, a real camera or microphone, or a real phone install —
+  the photo scan, describe-what-you-ate and a live barcode scan.
+- Sync through the actual app UI — still needs both accounts, which only Brian can create.
+  The credentials are in the build again, but a real two-device join has not been run.
+- Real-device performance. The numbers above are an emulated phone, not a Galaxy S23.
+- The one-time thumbnail backfill on Brian's real 473-recipe library. It is throttled and
+  stands aside for anything in the foreground, but the first long scroll after this update
+  will be doing extra work in the background.
+
+## Outstanding
+- Create both accounts, create the household, join from the second phone.
+- Paste the Gemini key under More on each device and confirm the AI features.
+- 8 leftover functions from the superseded design (`cardamom_create`, `cardamom_join`,
+  `cardamom_feed`, `cardamom_pull`, `cardamom_push`, `cardamom_photo_get`,
+  `cardamom_photo_ids`, `cardamom_photo_put`) are dead but still callable by `anon`. Drop them.
+- `dist/` and `docs/` still hold unreferenced asset files from earlier builds, because file
+  deletion is not available in these sessions. Harmless, but worth a tidy.
+
+## Deploying from here
+Build, copy `dist/` over `docs/`, commit, push. Pages picks it up in about a minute.
+`.env` holds the Supabase URL and publishable key and is gitignored — a build made without it
+ships with sync switched off, which is how the credentials went missing before.

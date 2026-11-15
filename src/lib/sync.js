@@ -1,6 +1,7 @@
 // Household sync through Supabase. One generic table (cardamom_items) + a storage bucket for photos.
 import { createClient } from '@supabase/supabase-js'
 import { getSettings, setSetting, dirtyItems, markClean, saveItems, listKind, unsyncedPhotos, markPhotoSynced, allPhotoKeys, putPhoto, getItem, setDirtyHook, deletePhoto } from '../store.js'
+import { adoptMine } from './log.js'
 
 export const BUILT_IN = { url: import.meta.env?.VITE_SB_URL || '', key: import.meta.env?.VITE_SB_KEY || '' }
 export const sbConfig = () => { const s = getSettings(); return { url: s.sbUrl || BUILT_IN.url, key: s.sbKey || BUILT_IN.key } }
@@ -21,8 +22,19 @@ export const syncStatus = () => ({ ...status })
 export const onSyncStatus = (f) => { subs.add(f); return () => subs.delete(f) }
 
 export async function session() { const c = sb(); if (!c) return null; return (await c.auth.getSession()).data.session }
-export async function signIn(email, password) { const { error } = await sb().auth.signInWithPassword({ email, password }); if (error) throw error; await findHousehold() }
-export async function signUp(email, password) { const { data, error } = await sb().auth.signUp({ email, password }); if (error) throw error; return !!data.session }
+export async function signIn(email, password) { const { error } = await sb().auth.signInWithPassword({ email, password }); if (error) throw error; await rememberMe(); await findHousehold() }
+export async function signUp(email, password) { const { data, error } = await sb().auth.signUp({ email, password }); if (error) throw error; if (data.session) await rememberMe(); return !!data.session }
+
+/**
+ * The food log is per person, so the device needs to know who is using it. Anything logged
+ * before signing in is claimed by whoever signs in here first, rather than being orphaned.
+ */
+export async function rememberMe() {
+  const uid = (await session())?.user?.id
+  if (!uid || getSettings().meId === uid) return
+  await setSetting('meId', uid)
+  await adoptMine(uid)
+}
 export async function signOut() { await sb()?.auth.signOut(); await setSetting('household', null); set({ state: 'off', message: '' }) }
 
 export async function findHousehold() {
@@ -114,6 +126,7 @@ async function syncPhotos(c, h) {
 let timer = null
 export function startAutoSync() {
   setDirtyHook(() => { clearTimeout(timer); timer = setTimeout(syncNow, 2500) })
+  rememberMe().catch(() => {})
   syncNow()
   setInterval(() => document.visibilityState === 'visible' && syncNow(), 60000)
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && syncNow())

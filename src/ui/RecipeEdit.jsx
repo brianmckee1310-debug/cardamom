@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { getItem, saveItem, allCategories, photosOf, putPhoto, deletePhoto, shrinkImage, uid } from '../store.js'
 import { useApp, Page, Icon, IconBtn, Stars, Field, AutoText, Busy } from './bits.jsx'
 import { suggestCategories, suggestCategoriesLocal, analyseNutrition } from '../lib/gemini.js'
+import { notablesForRecipe, mergeNotables } from '../lib/notables.js'
 import { aiCfg, hasAi, fetchImage } from '../lib/importers.js'
 
 const BLANK = { name: '', description: '', ingredients: '', directions: '', notes: '', nutritional_info: '', prep_time: '', cook_time: '', total_time: '', difficulty: '', servings: '', source: '', source_url: '', image_url: '', rating: 0, favorite: false, categories: [], photos: [] }
@@ -38,7 +39,14 @@ export default function RecipeEdit({ id, draft, via, photoBlobs }) {
   const suggestions = [...new Set([...(aiCats || []), ...local])].filter((c) => !r.categories.includes(c)).slice(0, 8)
   const toggleCat = (c) => setR((x) => ({ ...x, categories: x.categories.includes(c) ? x.categories.filter((y) => y !== c) : [...x.categories, c].sort((a, b) => a.localeCompare(b)) }))
   const askAi = async () => { setBusy('Thinking about categories'); try { const s = await suggestCategories(aiCfg(), r, all); setAiCats(s); if (!s.length) app.toast('No further suggestions') } catch (e) { app.toast(e.message) } setBusy('') }
-  const nutrition = async () => { setBusy('Analysing nutrition'); try { up('nutritional_info')(await analyseNutrition(aiCfg(), r)) } catch (e) { app.toast(e.message) } setBusy('') }
+  const nutrition = async () => {
+    setBusy('Analysing nutrition')
+    try {
+      const { values, text, notables } = await analyseNutrition(aiCfg(), r)
+      setR((x) => ({ ...x, nutritional_info: text, nut: values, notables: mergeNotables(notablesForRecipe(x), notables) }))
+    } catch (e) { app.toast(e.message) }
+    setBusy('')
+  }
 
   const save = async () => {
     if (!r.name.trim()) { app.toast('Give the recipe a name first'); return }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
-import { parseNumber, formatNumber, scaleLine, convertTemps, findTimers, splitSteps, groceryFromLine, guessAisle, isHeader, parseIngredient } from '../../src/lib/ingredients.js'
+import { parseNumber, formatNumber, scaleLine, convertTemps, findTimers, splitSteps, groceryFromLine, guessAisle, isHeader, parseIngredient, clampQty, parseQty, stepQty } from '../../src/lib/ingredients.js'
 import { recipeFromText } from '../../src/lib/textRecipe.js'
 import { recipeFromHtml, isoDuration, pageMeta } from '../../src/lib/webRecipe.js'
 import { buildIcs } from '../../src/lib/ics.js'
@@ -116,4 +116,56 @@ describe('paprika files', () => {
     console.log(`real export: ${n} recipes, ${photos} photos, ${withIng} with ingredients, ${cats.size} categories, failed ${res.failed.length}`)
     expect(res.failed).toEqual([]); expect(n).toBe(473); expect(ids.size).toBe(473)
   }, 120000)
+})
+
+describe('typed-in amounts', () => {
+  const LADDER = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4]
+  const B = { min: 0.05, max: 99 }
+
+  it('accepts an arbitrary portion', () => {
+    expect(parseQty('1.3', B)).toBe(1.3)
+    expect(parseQty('0.4', B)).toBe(0.4)
+    expect(parseQty('2', B)).toBe(2)
+    expect(parseQty('1,5', B)).toBe(1.5) // a comma decimal, as a phone keyboard may give it
+    expect(parseQty('  3.75  ', B)).toBe(3.75)
+  })
+
+  it('refuses junk rather than poisoning the total', () => {
+    for (const bad of ['', '   ', 'abc', '.', '-', '-2', '0', 'NaN', null, undefined]) {
+      expect(parseQty(bad, B)).toBe(null)
+    }
+  })
+
+  it('keeps a typed amount inside bounds', () => {
+    expect(parseQty('500', B)).toBe(99)
+    expect(parseQty('0.0001', B)).toBe(0.05)
+    expect(clampQty(1.23456, B)).toBe(1.235)
+  })
+
+  it('walks the ladder when it is standing on it', () => {
+    expect(stepQty(1, 1, LADDER, B)).toBe(1.25)
+    expect(stepQty(1, -1, LADDER, B)).toBe(0.75)
+    expect(stepQty(0.25, -1, LADDER, B)).toBe(0.05) // off the bottom, clamped
+    expect(stepQty(4, 1, LADDER, B)).toBe(5)        // off the top, falls back to a grain
+  })
+
+  it('steps to the next rung from an odd amount, so 1.3 is not a dead end', () => {
+    expect(stepQty(1.3, 1, LADDER, B)).toBe(1.5)
+    expect(stepQty(1.3, -1, LADDER, B)).toBe(1.25)
+    expect(stepQty(0.4, 1, LADDER, B)).toBe(0.5)
+    expect(stepQty(0.4, -1, LADDER, B)).toBe(0.33)
+  })
+
+  it('steps by a sensible grain with no ladder at all', () => {
+    expect(stepQty(0.5, 1, null, B)).toBe(0.75)
+    expect(stepQty(2, 1, null, B)).toBe(2.5)
+    expect(stepQty(6, 1, null, B)).toBe(7)
+    expect(stepQty(0.05, -1, null, B)).toBe(0.05)
+  })
+
+  it('scales an ingredient line by a typed factor', () => {
+    expect(scaleLine('2 cups flour', 1.3)).toBe('2 \u215d cups flour')   // 2.6 -> 2 5/8
+    expect(scaleLine('1 teaspoon salt', 1.3)).toBe('1 \u2153 teaspoon salt') // 1.3 -> 1 1/3
+    expect(scaleLine('1/2 cup milk', 1.3)).toBe('\u2154 cup milk')  // 0.65 -> 2/3
+  })
 })

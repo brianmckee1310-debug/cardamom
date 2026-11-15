@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
 import './styles.css'
 import { loadAll } from './store.js'
-import { startAutoSync } from './lib/sync.js'
 
 createRoot(document.getElementById('root')).render(<App />)
-loadAll().then(startAutoSync)
+// Sync (and with it the Supabase client) is loaded after the library is on screen.
+loadAll().then(() => import('./lib/sync.js')).then((m) => m.startAutoSync()).catch(() => {})
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('./sw.js').catch(() => {})

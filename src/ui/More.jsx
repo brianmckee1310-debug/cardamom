@@ -69,6 +69,20 @@ export default function More() {
   )
 }
 
+/** Sign-in and join errors come back in the service's own words; say them in ours. */
+function plainly(x) {
+  const m = (x?.message || String(x) || '').trim()
+  const low = m.toLowerCase()
+  if (/invalid login credentials/.test(low)) return 'That email and password do not match an account. Check the password, or use Create account if this is your first time.'
+  if (/email not confirmed/.test(low)) return 'This account still needs confirming. Open the email from Supabase, tap the link, then sign in here.'
+  if (/already registered|already been registered/.test(low)) return 'There is already an account with that email. Sign in instead.'
+  if (/password should be|at least 6/.test(low)) return 'The password needs to be at least 6 characters.'
+  if (/rate limit|too many/.test(low)) return 'Too many tries in a row. Wait a minute and try again.'
+  if (/failed to fetch|network/.test(low)) return 'Could not reach the server. Check the connection and try again.'
+  if (/no household|not found|invalid code/.test(low)) return 'No household matches that code. Codes are 8 characters — check it against the other phone.'
+  return m || 'Something went wrong.'
+}
+
 export function Household() {
   const app = useApp()
   const s = useSettings()
@@ -77,15 +91,17 @@ export function Household() {
   const [f, setF] = useState({ email: '', password: '', name: 'Our kitchen', code: '', url: s.sbUrl || '', key: s.sbKey || '' })
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState('')
+  const [note, setNote] = useState('')
   const up = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }))
   const refresh = async () => { try { const x = await session(); setSess(x); if (x && !s.household) await findHousehold() } catch (e) { setSess(null) } }
   useEffect(() => { refresh() }, [s.sbUrl, s.sbKey])
-  const run = (label, fn) => async (e) => { e?.preventDefault?.(); setBusy(label); setErr(''); try { await fn() } catch (x) { setErr(x.message || String(x)) } setBusy(''); refresh() }
+  const run = (label, fn) => async (e) => { e?.preventDefault?.(); setBusy(label); setErr(''); setNote(''); try { await fn() } catch (x) { setErr(plainly(x)) } setBusy(''); refresh() }
   const configured = !!sbConfig().url
   return (
     <Page title="Household and sync" onBack={app.back}>
       <div className="form">
-        {err && <p className="banner err">{err}</p>}
+        {err && <p className="banner err"><Icon name="alert" size={16} />{err}</p>}
+        {note && <p className="banner"><Icon name="info" size={16} />{note}</p>}
         {busy && <Busy label={busy} />}
         {!configured ? (
           <>
@@ -100,15 +116,16 @@ export function Household() {
         ) : sess === undefined ? <Busy label="Checking" /> : !sess ? (
           <form onSubmit={run('Signing in', () => signIn(f.email.trim(), f.password))}>
             <p className="lead">Sign in to share one library.</p>
-            <Field label="Email"><input type="email" value={f.email} onChange={up('email')} autoComplete="email" /></Field>
-            <Field label="Password"><input type="password" value={f.password} onChange={up('password')} autoComplete="current-password" /></Field>
-            <div className="rowline"><button className="btn primary grow" disabled={!f.email || f.password.length < 6}>Sign in</button><button type="button" className="btn" disabled={!f.email || f.password.length < 6} onClick={run('Creating account', async () => { const inNow = await signUp(f.email.trim(), f.password); if (!inNow) throw new Error('Account created. Open the confirmation email, then sign in.') })}>Create account</button></div>
+            <p className="muted small nudge">New here? Fill these in and tap <b>Create account</b> — then join the household with the 8-character code from the other phone. The recipes, lists and planner stay in step from then on.</p>
+            <Field label="Email"><input type="email" value={f.email} onChange={up('email')} autoComplete="email" inputMode="email" /></Field>
+            <Field label="Password" hint="At least 6 characters."><input type="password" value={f.password} onChange={up('password')} autoComplete="current-password" /></Field>
+            <div className="rowline"><button className="btn primary grow" disabled={!f.email || f.password.length < 6}>Sign in</button><button type="button" className="btn" disabled={!f.email || f.password.length < 6} onClick={run('Creating account', async () => { const inNow = await signUp(f.email.trim(), f.password); if (!inNow) setNote('Account created. Open the confirmation email, tap the link, then sign in here.') })}>Create account</button></div>
           </form>
         ) : !s.household ? (
           <>
             <p className="lead">Signed in as {sess.user.email}</p>
             <form className="card" onSubmit={run('Creating', () => createHousehold(f.name).then(syncNow))}><Field label="Start a household" hint="Do this on the phone that already has the recipes."><input value={f.name} onChange={up('name')} /></Field><button className="btn primary">Create</button></form>
-            <form className="card" onSubmit={run('Joining', () => joinHousehold(f.code).then(syncNow))}><Field label="Or join with a code"><input value={f.code} onChange={up('code')} placeholder="8 letters and numbers" autoCapitalize="characters" /></Field><button className="btn primary" disabled={f.code.trim().length < 6}>Join</button></form>
+            <form className="card" onSubmit={run('Joining', () => joinHousehold(f.code).then(syncNow))}><Field label="Or join with a code" hint="The code is on the other phone, under More, Household and sync."><input value={f.code} onChange={up('code')} placeholder="8 letters and numbers" autoCapitalize="characters" autoCorrect="off" spellCheck="false" /></Field><button className="btn primary" disabled={f.code.trim().length < 6}>Join</button></form>
             <button className="btn" onClick={run('Signing out', signOut)}>Sign out</button>
           </>
         ) : (

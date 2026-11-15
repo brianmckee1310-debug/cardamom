@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useItem, saveItem, removeItem, usePhoto, photosOf, useSettings, setSetting } from '../store.js'
-import { useApp, Page, Icon, IconBtn, Stars, Sheet, Busy } from './bits.jsx'
+import { useApp, Page, Icon, IconBtn, Stars, Sheet, Busy, NumStepper, today } from './bits.jsx'
+import { notablesForRecipe, mergeNotables } from '../lib/notables.js'
+import { guessMeal } from '../lib/log.js'
+import { NotableCard } from './FoodLog.jsx'
 import { scaleLine, convertTemps, splitLines, splitSteps, findTimers, isHeader, parseServings, formatNumber } from '../lib/ingredients.js'
 import { analyseNutrition } from '../lib/gemini.js'
 import { aiCfg, hasAi } from '../lib/importers.js'
-import { writePaprikaFile } from '../lib/paprika.js'
 
 const crossed = new Map() // recipe id -> Set of ingredient indexes, kept while the app is open
 const stepAt = new Map()
@@ -47,16 +49,26 @@ export default function RecipeView({ id }) {
   if (!crossed.has(id)) crossed.set(id, new Set())
   const done = crossed.get(id)
   const step = stepAt.get(id) ?? -1
+  // Parsing the ingredients and directions, and matching the notables table, used to run on
+  // every render -- including every tap on an ingredient. Memoised, so a tap is just a repaint.
+  const ings = useMemo(() => splitLines(r?.ingredients), [r?.ingredients])
+  const steps = useMemo(() => splitSteps(r?.directions), [r?.directions])
+  const base = useMemo(() => parseServings(r?.servings), [r?.servings])
+  const whatsIn = useMemo(() => mergeNotables(notablesForRecipe(r || {}, 8), r?.notables), [r?.id, r?.ingredients, r?.name, r?.notables])
+  const scaledIngs = useMemo(() => ings.map((l) => (isHeader(l) ? null : scaleLine(l, factor, system))), [ings, factor, system])
+  const scaledSteps = useMemo(() => steps.map((x) => convertTemps(x, system)), [steps, system])
+  const stepNums = useMemo(() => { let n = 0; return steps.map((x) => (isHeader(x) ? null : ++n)) }, [steps])
   if (!r) return <Page title="Recipe" onBack={app.back}><p className="pad muted">This recipe was deleted.</p></Page>
-  const ings = splitLines(r.ingredients)
-  const steps = splitSteps(r.directions)
-  const base = parseServings(r.servings)
   const servingsText = base && factor !== 1 ? r.servings.replace(/\d+(?:\.\d+)?/, formatNumber(base * factor, { fractions: false })) : r.servings
   const set = (patch) => saveItem({ ...r, ...patch })
 
   const nutrition = async () => {
     setMenu(false); setBusy('Analysing nutrition')
-    try { await set({ nutritional_info: await analyseNutrition(aiCfg(), r) }); app.toast('Nutrition added') } catch (e) { app.toast(e.message) }
+    try {
+      const { values, text, notables } = await analyseNutrition(aiCfg(), r)
+      await set({ nut: values, nutritional_info: text, notables: mergeNotables(notablesForRecipe(r), notables) })
+      app.toast('Nutrition added')
+    } catch (e) { app.toast(e.message) }
     setBusy('')
   }
   const share = async () => {
@@ -66,6 +78,7 @@ export default function RecipeView({ id }) {
   }
   const exportOne = async () => {
     setMenu(false)
+    const { writePaprikaFile } = await import('../lib/paprika.js') // the zip writer is a one-off
     const photos = await Promise.all((await photosOf(r.id)).map(async (p) => ({ idx: p.idx, bytes: new Uint8Array(await p.blob.arrayBuffer()) })))
     download(`${r.name}.paprikarecipes`, new Blob([writePaprikaFile([{ recipe: r, photos }])], { type: 'application/octet-stream' }))
   }
@@ -96,7 +109,7 @@ export default function RecipeView({ id }) {
             <div className="sec-head"><h2>Ingredients</h2><button className={`pillbtn ${factor !== 1 || system !== 'original' ? 'on' : ''}`} onClick={() => setScaling(true)}><Icon name="scale" size={15} />{factor !== 1 ? `${formatNumber(factor)}×` : 'Scale'}{system !== 'original' ? ` · ${system === 'metric' ? 'Metric' : 'US'}` : ''}</button></div>
             <ul className="ings">
               {ings.map((l, i) => isHeader(l) ? <li key={i} className="ing-head">{l.replace(/^#+\s*|\*\*/g, '')}</li> : (
-                <li key={i} className={done.has(i) ? 'done' : ''}><button onClick={() => { done.has(i) ? done.delete(i) : done.add(i); force((x) => x + 1) }}>{scaleLine(l, factor, system)}</button></li>
+                <li key={i} className={done.has(i) ? 'done' : ''}><button onClick={() => { done.has(i) ? done.delete(i) : done.add(i); force((x) => x + 1) }}>{scaledIngs[i]}</button></li>
               ))}
               {!ings.length && <li className="muted">No ingredients listed.</li>}
             </ul>
@@ -105,19 +118,37 @@ export default function RecipeView({ id }) {
             <div className="sec-head"><h2>Directions</h2></div>
             <ol className="steps">
               {steps.map((s, i) => isHeader(s) ? <li key={i} className="ing-head">{s}</li> : (
-                <li key={i} className={step === i ? 'current' : ''} onClick={() => { stepAt.set(id, step === i ? -1 : i); force((x) => x + 1) }}><span className="step-n">{steps.slice(0, i + 1).filter((x) => !isHeader(x)).length}</span><p><StepText text={convertTemps(s, system)} onTimer={app.startTimer} /></p></li>
+                <li key={i} className={step === i ? 'current' : ''} onClick={() => { stepAt.set(id, step === i ? -1 : i); force((x) => x + 1) }}><span className="step-n">{stepNums[i]}</span><p><StepText text={scaledSteps[i]} onTimer={app.startTimer} /></p></li>
               ))}
               {!steps.length && <li className="muted">No directions listed.</li>}
             </ol>
             {r.notes && <><div className="sec-head"><h2>Notes</h2></div><p className="notes">{r.notes}</p></>}
             {r.nutritional_info && <><div className="sec-head"><h2>Nutrition</h2></div><p className="notes nutrition">{r.nutritional_info}</p></>}
+            {whatsIn.length > 0 && (
+              <>
+                <div className="sec-head"><h2>What&rsquo;s in it</h2></div>
+                <div className="notable-list">{whatsIn.map((n) => <NotableCard key={n.id || n.label} n={n} />)}</div>
+                <p className="muted small nudge">Interesting rather than prescriptive, and not medical advice.</p>
+              </>
+            )}
           </section>
         </div>
       </article>
       {scaling && (
         <Sheet title="Scale and convert" onClose={() => setScaling(false)}>
-          <div className="seg">{SCALES.map((f) => <button key={f} className={factor === f ? 'on' : ''} onClick={() => setFactor(f)}>{formatNumber(f)}×</button>)}</div>
-          {base && <label className="field inline"><span className="field-label">Servings</span><span className="stepper"><IconBtn icon="minus" label="Fewer servings" onClick={() => setFactor(Math.max(1, Math.round(base * factor) - 1) / base)} /><b>{formatNumber(base * factor, { fractions: false })}</b><IconBtn icon="plus" label="More servings" onClick={() => setFactor((Math.round(base * factor) + 1) / base)} /></span></label>}
+          <div className="seg">{SCALES.map((f) => <button key={f} className={Math.abs(factor - f) < 1e-9 ? 'on' : ''} onClick={() => setFactor(f)}>{formatNumber(f)}×</button>)}</div>
+          {base ? (
+            <>
+              <span className="field-label">Servings</span>
+              <NumStepper value={Math.round(base * factor * 100) / 100} onChange={(n) => setFactor(n / base)} unit="serving" min={0.25} max={500} label="Servings"
+                hint={`Recipe makes ${formatNumber(base, { fractions: false })} — type any number`} />
+            </>
+          ) : (
+            <>
+              <span className="field-label">Multiply by</span>
+              <NumStepper value={factor} onChange={setFactor} steps={SCALES} min={0.1} max={50} label="Scale" hint="Type any amount, e.g. 1.3" />
+            </>
+          )}
           <span className="field-label">Units</span>
           <div className="seg">{[['original', 'As written'], ['metric', 'Metric'], ['us', 'US']].map(([k, l]) => <button key={k} className={system === k ? 'on' : ''} onClick={() => setSetting('units', k)}>{l}</button>)}</div>
         </Sheet>
@@ -125,6 +156,7 @@ export default function RecipeView({ id }) {
       {menu && (
         <Sheet title={r.name} onClose={() => setMenu(false)}>
           <div className="menu">
+            <button onClick={() => { setMenu(false); app.push('logAdd', { recipeId: id, date: today(), meal: guessMeal() }) }}><Icon name="bowl" />Log that I ate this</button>
             <button onClick={() => { setMenu(false); app.push('addToMenu', { recipeId: id }) }}><Icon name="menu" />Add to a menu</button>
             <button onClick={nutrition} disabled={!hasAi()}><Icon name="chart" />Analyse nutrition{!hasAi() && <small>Needs Gemini key</small>}</button>
             <button onClick={share}><Icon name="share" />Share as text</button>

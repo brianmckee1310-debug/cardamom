@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { clampQty, parseQty, stepQty } from '../lib/ingredients.js'
 
 export const AppCtx = createContext(null)
 export const useApp = () => useContext(AppCtx)
@@ -26,6 +27,10 @@ const P = {
   pin: 'M9 4h6l-1 6 3 3H7l3-3zM12 13v7', users: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6 6 0 0 1 12 0M16 4.5a3.5 3.5 0 0 1 0 6.5M17.5 14.5A6 6 0 0 1 21 20',
   chart: 'M12 3a9 9 0 1 0 9 9h-9z M14.5 3.4A9 9 0 0 1 20.6 9.5h-6.1z', filter: 'M4 6h16l-6 7v6l-4-2v-4z', print: 'M7 8V4h10v4M7 17H4V9h16v8h-3M7 14h10v6H7z',
   minus: 'M5 12h14', sort: 'M7 5v14M4 16l3 3 3-3M17 19V5M14 8l3-3 3 3',
+  bowl: 'M3.5 11h17a8.5 8.5 0 0 1-17 0zM9 8c0-1.6.8-2.3 1.6-3M13.5 8c0-2 1-2.8 1.9-4',
+  leaf: 'M5 20c0-8.5 5.2-14.5 14.5-14.5C19.5 14 14.3 20 5 20zM5.5 19.5c1.8-5.4 4.8-8.6 8.5-10.6',
+  alert: 'M12 4.5l8.5 15H3.5zM12 10v4M12 17.2h.01',
+  info: 'M12 3.2a8.8 8.8 0 1 0 0 17.6 8.8 8.8 0 0 0 0-17.6zM12 11v5.5M12 7.8h.01',
 }
 export function Icon({ name, size = 22, fill, ...rest }) {
   return <svg className="ico" width={size} height={size} viewBox="0 0 24 24" fill={fill || 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...rest}><path d={P[name]} /></svg>
@@ -86,6 +91,45 @@ export function AutoText({ value, onChange, rows = 3, ...rest }) {
   const ref = useRef(null)
   useEffect(() => { const el = ref.current; if (!el) return; el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px' }, [value])
   return <textarea ref={ref} rows={rows} value={value} onChange={(e) => onChange(e.target.value)} {...rest} />
+}
+
+/** Round for display without trailing zeros: 1.3 -> "1.3", 0.25 -> "0.25", 2 -> "2". */
+export const fmtQty = (n) => String(Math.round((Number(n) || 0) * 1000) / 1000)
+
+/**
+ * A number you can either step or type. The +/- buttons walk a ladder of common amounts when
+ * you are on one, and the number itself is an input, so an odd portion (1.3) is simply typed.
+ * Junk and out-of-range input fall back to the last good value rather than poisoning the total.
+ */
+export function NumStepper({ value, onChange, unit, steps, min = 0.05, max = 999, label = 'Amount', hint }) {
+  const [draft, setDraft] = useState(null)
+  const [nudge, setNudge] = useState(0)
+  const v = Number(value) || 0
+  const bounds = { min, max }
+  const emit = (n) => { setDraft(null); if (n != null && Math.abs(n - v) > 1e-9) { setNudge((x) => x + 1); onChange(n) } }
+  const bump = (dir) => emit(stepQty(v, dir, steps, bounds))
+  const commit = () => { if (draft == null) return; const n = parseQty(draft, bounds); setDraft(null); emit(n) }
+  return (
+    <div className="qty">
+      <IconBtn icon="minus" label={`Less${unit ? ' ' + unit : ''}`} disabled={v <= min} onClick={() => bump(-1)} />
+      <span className="qty-mid" key={nudge}>
+        <input className="qty-input" type="text" inputMode="decimal" enterKeyHint="done" aria-label={label}
+          value={draft ?? fmtQty(clampQty(v, bounds))}
+          onChange={(e) => setDraft(e.target.value.replace(/[^\d.,]/g, '').slice(0, 7))}
+          onFocus={(e) => e.target.select()}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() }
+            else if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur() }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); bump(1) }
+            else if (e.key === 'ArrowDown') { e.preventDefault(); bump(-1) }
+          }} />
+        {unit && <small>{unit}{v === 1 ? '' : 's'}</small>}
+      </span>
+      <IconBtn icon="plus" label={`More${unit ? ' ' + unit : ''}`} disabled={v >= max} onClick={() => bump(1)} />
+      {hint && <span className="qty-hint">{hint}</span>}
+    </div>
+  )
 }
 
 export function Busy({ label }) { return <div className="busy"><span className="spinner" />{label}</div> }
