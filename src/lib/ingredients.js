@@ -155,7 +155,10 @@ export function groceryFromLine(line) {
   const p = parseIngredient(line)
   if (p.qty == null) return { qty: '', name: line.replace(/\(.*?\)/g, '').split(',')[0].trim() }
   const qty = p.head
-  const name = p.text.replace(/\(.*?\)/g, '').replace(/^of\s+/i, '').split(',')[0].trim()
+  let name = p.text.replace(/\(.*?\)/g, '').replace(/^of\s+/i, '').split(',')[0].trim()
+  // "3 cloves garlic" is garlic, counted in cloves: the counting word belongs with the amount
+  const count = !p.unit && name.match(/^(cloves?|cans?|heads?|bunch(?:es)?|stalks?|sprigs?|slices?|jars?|packages?|pkgs?|bags?|box(?:es)?|bottles?|pieces?|sticks?|ears?|fillets?|links?)\s+(?:of\s+)?(?=\S)/i)
+  if (count) return { qty: `${qty} ${count[1]}`, name: name.slice(count[0].length).trim() }
   return { qty, name: name || p.text }
 }
 

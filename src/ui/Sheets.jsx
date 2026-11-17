@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react'
-import { useKind, getItem, saveItems, saveItem, removeItem, listKind } from '../store.js'
+import { useKind, getItem, saveItems, saveItem, removeItem, listKind, useSettings, setSetting } from '../store.js'
+import { mergeIntoList, looseMatch } from '../lib/grocery.js'
+import { useDoubleTap } from './Grocery.jsx'
 import { useApp, Sheet, Icon, Field, fmtDate, today } from './bits.jsx'
 import { RecipeRow, searchRecipes } from './Recipes.jsx'
 import { splitLines, scaleLine, isHeader, groceryFromLine, guessAisle, AISLE_ORDER } from '../lib/ingredients.js'
 import { MEAL_TYPES } from '../lib/ics.js'
 
-const norm = (s) => s.toLowerCase().replace(/[^a-z ]/g, '').replace(/\b(fresh|large|small|medium|chopped|diced|minced|sliced|ground|dried|of)\b/g, '').replace(/s\b/g, '').replace(/\s+/g, ' ').trim()
-export const inPantry = (name, pantry) => { const n = norm(name); return !!n && pantry.some((p) => p.inStock !== false && (() => { const k = norm(p.name); return k && (n === k || n.includes(k) || k.includes(n)) })()) }
+export const inPantry = (name, pantry) => pantry.some((p) => p.inStock !== false && looseMatch(name, p.name))
 
 /** Choose one or more recipes. onPick(ids) */
 export function RecipePicker({ title = 'Choose recipes', onPick, multi = true }) {
@@ -27,28 +28,50 @@ export function RecipePicker({ title = 'Choose recipes', onPick, multi = true })
   )
 }
 
+/**
+ * Send one recipe, or a whole week of them, to a shopping list. Each line is tapped on or off;
+ * a double tap marks it "check at home first" for when you are not standing in the kitchen.
+ */
 export function AddToGroceries({ recipeIds, factor = 1 }) {
   const app = useApp()
   const pantry = useKind('pantry')
-  const lines = useMemo(() => recipeIds.flatMap((id) => { const r = getItem(id); return r ? splitLines(r.ingredients).filter((l) => !isHeader(l)).map((l) => ({ recipe: r, line: scaleLine(l, factor) })) : [] }).map((x, i) => { const g = groceryFromLine(x.line); return { ...x, ...g, i, have: inPantry(g.name, pantry) } }), [])
-  const [off, setOff] = useState(() => new Set(lines.filter((l) => l.have).map((l) => l.i)))
+  const lists = useKind('glist')
+  const settings = useSettings()
+  const [list, setList] = useState(lists.some((l) => l.id === settings.glist) ? settings.glist : '')
+  const isDouble = useDoubleTap()
+  const groups = useMemo(() => { let i = 0; return recipeIds.map((id) => getItem(id)).filter((r) => r && !r.deleted).map((r) => ({ recipe: r, lines: splitLines(r.ingredients).filter((l) => !isHeader(l)).map((l) => { const line = scaleLine(l, factor); const g = groceryFromLine(line); return { recipe: r, line, ...g, i: i++, have: inPantry(g.name, pantry) } }) })) }, [])
+  const lines = groups.flatMap((g) => g.lines)
+  const [state, setState] = useState(() => Object.fromEntries(lines.map((l) => [l.i, l.have ? 'off' : 'on'])))
+  const tap = (l) => setState((s) => ({ ...s, [l.i]: isDouble(l.i) ? (navigator.vibrate?.(25), 'check') : s[l.i] === 'on' ? 'off' : 'on' }))
+  const setAll = (g, on) => setState((s) => ({ ...s, ...Object.fromEntries(g.lines.map((l) => [l.i, on ? (s[l.i] === 'check' ? 'check' : 'on') : 'off'])) }))
+  const picked = lines.filter((l) => state[l.i] !== 'off')
   const add = async () => {
-    const picked = lines.filter((l) => !off.has(l.i))
-    await saveItems(picked.map((l) => ({ kind: 'grocery', name: l.name, qty: l.qty, aisle: guessAisle(l.name), recipe: l.recipe.name, recipeId: l.recipe.id, done: false })))
-    app.back(); app.toast(`${picked.length} item${picked.length === 1 ? '' : 's'} added to groceries`)
+    const existing = listKind('grocery').filter((e) => (e.list || '') === list)
+    const out = mergeIntoList(existing, picked.map((l) => ({ kind: 'grocery', name: l.name, qty: l.qty, aisle: guessAisle(l.name), recipe: l.recipe.name, recipeId: l.recipe.id, done: false, check: state[l.i] === 'check', list: list || undefined })))
+    await saveItems(out)
+    const combined = picked.length - out.filter((o) => !o.id).length
+    if (picked.some((l) => state[l.i] === 'check') && !settings.usedCheck) setSetting('usedCheck', true)
+    app.back(); app.toast(`${picked.length} item${picked.length === 1 ? '' : 's'} added${combined > 0 ? `, ${combined} combined` : ''}`)
   }
   return (
     <Sheet title="Add to groceries" onClose={app.back} tall>
-      <ul className="list plain checks">
-        {lines.map((l) => (
-          <li key={l.i} className="row"><button className="row-main" onClick={() => setOff((s) => { const n = new Set(s); n.has(l.i) ? n.delete(l.i) : n.add(l.i); return n })}>
-            <span className={`tick ${off.has(l.i) ? '' : 'on'}`}><Icon name="check" size={16} /></span>
-            <span className="row-text"><b>{l.line}</b>{l.have && <small>In your pantry</small>}{recipeIds.length > 1 && <small>{l.recipe.name}</small>}</span>
-          </button></li>
-        ))}
-        {!lines.length && <li className="muted pad">No ingredients to add.</li>}
-      </ul>
-      <button className="btn primary block sticky" disabled={lines.length === off.size} onClick={add}>Add {lines.length - off.size} items</button>
+      {lists.length > 0 && <div className="lists inset">{[{ id: '', name: 'Groceries' }, ...lists].map((l) => <button key={l.id} className={`pillbtn ${list === l.id ? 'on' : ''}`} onClick={() => setList(l.id)}>{l.name}</button>)}</div>}
+      <p className="hint inset">Tap to include or skip. Double tap if you need to check at home first.</p>
+      {groups.map((g) => { const on = g.lines.filter((l) => state[l.i] !== 'off').length; return (
+        <section key={g.recipe.id} className="addgroup">
+          {groups.length > 1 && <h3 className="group-h flush">{g.recipe.name}<button className="group-x" onClick={() => setAll(g, on === 0)}>{on === 0 ? 'All' : 'None'}</button></h3>}
+          <ul className="list plain checks">
+            {g.lines.map((l) => (
+              <li key={l.i} className={`row ${state[l.i] === 'check' ? 'ask' : ''}`}><button className="row-main" onClick={() => tap(l)}>
+                <span className={`tick ${state[l.i] === 'off' ? '' : 'on'} ${state[l.i] === 'check' ? 'ask' : ''}`}><Icon name={state[l.i] === 'check' ? 'help' : 'check'} size={16} /></span>
+                <span className="row-text"><b>{l.line}</b>{state[l.i] === 'check' ? <small className="warn">Check at home first</small> : l.have && <small>We should have this</small>}</span>
+              </button></li>
+            ))}
+          </ul>
+        </section>
+      ) })}
+      {!lines.length && <p className="muted pad">No ingredients to add.</p>}
+      <button className="btn primary block sticky" disabled={!picked.length} onClick={add}>Add {picked.length} item{picked.length === 1 ? '' : 's'}</button>
     </Sheet>
   )
 }
@@ -102,6 +125,7 @@ export function ItemEdit({ item }) {
   const [x, setX] = useState(item)
   const up = (k) => (e) => setX((v) => ({ ...v, [k]: e.target.value }))
   const pantry = item.kind === 'pantry'
+  const lists = useKind('glist')
   const save = async () => { if (!x.name.trim()) return; await saveItem({ ...x, name: x.name.trim() }); app.back() }
   return (
     <Sheet title={item.id ? 'Edit item' : 'New item'} onClose={app.back}>
@@ -110,6 +134,7 @@ export function ItemEdit({ item }) {
         <Field label="Amount"><input value={x.qty || ''} onChange={up('qty')} /></Field>
         <Field label="Aisle"><select value={x.aisle || 'Other'} onChange={up('aisle')}>{AISLE_ORDER.map((a) => <option key={a}>{a}</option>)}</select></Field>
       </div>
+      {!pantry && lists.length > 0 && <Field label="List"><select value={x.list || ''} onChange={(e) => setX((v) => ({ ...v, list: e.target.value || undefined }))}><option value="">Groceries</option>{lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></Field>}
       {pantry && <Field label="Use by"><input type="date" value={x.expires || ''} onChange={up('expires')} /></Field>}
       <div className="rowline">
         {item.id && <button className="btn danger" onClick={async () => { await removeItem(item.id); app.back(); app.removed(`Removed ${item.name}`, item.id) }}>Delete</button>}

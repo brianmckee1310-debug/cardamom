@@ -86,12 +86,15 @@ export default function Recipes() {
             <button className="btn" onClick={() => push('import')}>Add a recipe by hand</button>
           </span>
         </Empty>
-      ) : shown.length === 0 ? <Empty icon="search" title="Nothing matches">Try fewer words or another category.</Empty> : (
+      ) : shown.length === 0 ? <Empty icon="search" title="Nothing matches">Try fewer words or another category.</Empty> : (<>
+        {!q && cat === 'all' && recipes.some((r) => r.pinned) && (
+          <div className="lists pins" aria-label="Pinned recipes">{recipes.filter((r) => r.pinned).sort((a, b) => a.name.localeCompare(b.name)).map((r) => <button key={r.id} className="pillbtn" onClick={() => push('recipe', { id: r.id })}><Icon name="pin" size={14} />{r.name}</button>)}</div>
+        )}
         <ul className="list">
           {shown.slice(0, limit).map((r) => <RecipeRow key={r.id} recipe={r} onClick={open} />)}
           {shown.length > limit && <li ref={more} className="row more-row">Loading more</li>}
         </ul>
-      )}
+      </>)}
       {picking && (
         <Sheet title="Categories" onClose={() => setPicking(false)} tall>
           <ul className="list plain">

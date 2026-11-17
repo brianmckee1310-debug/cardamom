@@ -6,8 +6,8 @@ import RecipeView from './ui/RecipeView.jsx'
 import RecipeEdit from './ui/RecipeEdit.jsx'
 import CookMode from './ui/CookMode.jsx'
 import Grocery from './ui/Grocery.jsx'
-import Pantry from './ui/Pantry.jsx'
-import Planner from './ui/Planner.jsx'
+import Pantry, { Cookable } from './ui/Pantry.jsx'
+import Planner, { WeekGlance } from './ui/Planner.jsx'
 import { Menus, MenuView } from './ui/Menus.jsx'
 import FoodLog from './ui/FoodLog.jsx'
 import LogAdd, { LogEntry, LogTargets } from './ui/LogSheets.jsx'
@@ -20,10 +20,10 @@ const ImportSheet = lazy(() => import('./ui/Import.jsx'))
 const Barcode = lazy(() => import('./ui/Barcode.jsx'))
 const More = lazy(() => import('./ui/More.jsx'))
 const named = (key) => lazy(() => import('./ui/More.jsx').then((m) => ({ default: m[key] })))
-const Household = named('Household'), Roadmap = named('Roadmap'), Categories = named('Categories')
+const Household = named('Household'), Roadmap = named('Roadmap'), Categories = named('Categories'), Trash = named('Trash')
 
 const TABS = [['recipes', 'Recipes', 'book'], ['log', 'Log', 'bowl'], ['groceries', 'Groceries', 'cart'], ['planner', 'Planner', 'calendar'], ['pantry', 'Pantry', 'jar'], ['more', 'More', 'more']]
-const VIEWS = { recipe: RecipeView, edit: RecipeEdit, cook: CookMode, import: ImportSheet, menus: Menus, menu: MenuView, household: Household, roadmap: Roadmap, categories: Categories, barcode: Barcode, pick: RecipePicker, addToGroceries: AddToGroceries, addToPlan: AddToPlan, itemEdit: ItemEdit, addToMenu: AddToMenu, logAdd: LogAdd, logEntry: LogEntry, logTargets: LogTargets }
+const VIEWS = { recipe: RecipeView, edit: RecipeEdit, cook: CookMode, import: ImportSheet, menus: Menus, menu: MenuView, household: Household, roadmap: Roadmap, categories: Categories, barcode: Barcode, pick: RecipePicker, addToGroceries: AddToGroceries, addToPlan: AddToPlan, itemEdit: ItemEdit, addToMenu: AddToMenu, logAdd: LogAdd, logEntry: LogEntry, logTargets: LogTargets, weekGlance: WeekGlance, cookable: Cookable, trash: Trash }
 const TAB_COMPONENTS = { recipes: Recipes, log: FoodLog, groceries: Grocery, planner: Planner, pantry: Pantry, more: More }
 const fmt = (s) => { s = Math.max(0, Math.ceil(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0') }
 

@@ -157,6 +157,7 @@ export default function RecipeView({ id }) {
         <Sheet title={r.name} onClose={() => setMenu(false)}>
           <div className="menu">
             <button onClick={() => { setMenu(false); app.push('logAdd', { recipeId: id, date: today(), meal: guessMeal() }) }}><Icon name="bowl" />Log that I ate this</button>
+            <button onClick={() => { setMenu(false); set({ pinned: !r.pinned }); app.toast(r.pinned ? 'Unpinned' : 'Pinned to the top of Recipes') }}><Icon name="pin" />{r.pinned ? 'Unpin' : 'Pin to the top'}</button>
             <button onClick={() => { setMenu(false); app.push('addToMenu', { recipeId: id }) }}><Icon name="menu" />Add to a menu</button>
             <button onClick={nutrition} disabled={!hasAi()}><Icon name="chart" />Analyse nutrition{!hasAi() && <small>Needs Gemini key</small>}</button>
             <button onClick={share}><Icon name="share" />Share as text</button>

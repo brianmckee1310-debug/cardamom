@@ -1,6 +1,6 @@
 # Cardamom roadmap
 
-Personal Paprika-style recipe manager for Brian and his wife. Updated 2026-11-15, version 1.3.0.
+Personal Paprika-style recipe manager for Brian and his wife. Updated 2026-11-16, version 1.4.0.
 
 Live at https://brianmckee1310-debug.github.io/cardamom/
 Code at https://github.com/brianmckee1310-debug/cardamom (Pages serves `main` / `/docs`)
@@ -14,8 +14,47 @@ Source on disk at `C:\Users\brian\Claude\Projects\Cardamom`
 | 4 | Household sync, live calendar feed, permanent web address | Done | |
 | 5 | Daily food log | Done | |
 | 6 | Polish and the first shared build | Done | |
-| 7 | What real kitchen use turns up | Next | Opus 5, medium effort |
-| 8 | Hands-free beyond cook mode | Later | Opus 5, medium effort |
+| 7 | Shopping and planning upgrade | Done | |
+| 8 | Paprika parity, the rest: subcategories, drag to reorder, custom aisles and meal types, a replacement for the in-app browser | Next | Opus 5 or Fable 5.2, medium effort |
+| 9 | Hands-free beyond cook mode | Later | Opus 5, medium effort |
+
+## Phase 7, done on 2026-11-16 — version 1.4.0
+
+Brian's three requests, the four extras he picked, and the cheap Paprika gaps.
+
+- **Check at home first.** Double tap any item — on the grocery list, or while ticking ingredients
+  in the add-to-groceries sheet — and it turns amber and moves to a "Check at home first" section
+  at the top of the list. Each one resolves with **Have it** (removed, and remembered in the
+  pantry) or **Need it** (drops into the normal list). A single tap still just ticks an item off.
+- **A whole week to groceries.** The planner has a **To groceries** button for the week on show.
+  Ingredients are grouped under their recipe with All/None per recipe; things the pantry says you
+  have start unticked.
+- **Week at a glance.** A full-screen view of the week: seven days, recipe names, no photos, no
+  buttons, and no tab bar over the bottom. The type shrinks until everything fits one screen, so a
+  screenshot always has the whole week.
+- **Duplicates combine.** Three recipes that each want an onion give one line, "3 yellow onion",
+  naming all three recipes. Amounts are only added when the units agree; otherwise they are
+  written side by side rather than guessed. "3 cloves garlic" is now filed as garlic, 3 cloves.
+- **Lists per store.** Chips across the top of Groceries: the default list plus any you create
+  (Costco, hardware store). Items can be moved between lists from the edit sheet.
+- **Month view** on the planner: a dot per planned meal, tap a day to see and edit it.
+- **What can I make?** on the Pantry tab ranks recipes by how much is already in the house.
+- **The pantry fills itself.** Clearing purchased groceries with "remember we have them", or
+  tapping Have it, updates the pantry without duplicates. Nobody has to keep it by hand.
+- **Pinned recipes** (a strip at the top of Recipes) and **Recently deleted** (under More), both
+  of which Paprika has and Cardamom did not.
+
+### Checked
+73 unit tests. A scripted phone-width walk-through of every item above: 31 checks, no console
+errors, nothing overflowing. Screens looked at by eye in light and dark.
+
+### Not verified
+On a real phone: the feel of the double tap (the window is 350 ms), and the haptic tick. The
+pantry-driven features are only as good as the pantry, which starts empty.
+
+### Paprika gaps still open (found by comparing against Paprika's own help contents)
+Subcategories; an in-app browser (Cardamom uses share-to-app and paste instead); dragging to
+reorder. Custom aisles, custom meal types and print layouts were not audited in depth.
 
 ## Phase 6, done on 2026-11-15 — version 1.3.0
 

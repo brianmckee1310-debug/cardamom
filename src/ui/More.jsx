@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { useSettings, setSetting, useKind, saveItems, photosOf, allCategories, listKind } from '../store.js'
-import { useApp, Page, Icon, Field, Busy } from './bits.jsx'
+import { useSettings, setSetting, useKind, saveItems, photosOf, allCategories, listKind, useStore, restoreItem } from '../store.js'
+import { useApp, Page, Icon, Field, Busy, Empty } from './bits.jsx'
 import { ROADMAP, VERSION } from '../roadmap.js'
 import { sb, sbConfig, BUILT_IN, session, signIn, signUp, signOut, createHousehold, joinHousehold, findHousehold, syncNow, syncStatus, onSyncStatus, functionsUrl } from '../lib/sync.js'
 import { DEFAULT_MODEL, recipeFromText } from '../lib/gemini.js'
@@ -44,6 +44,7 @@ export default function More() {
           <Row icon="menu" title="Menus" sub="Sets of recipes for occasions" onClick={() => app.push('menus')} />
           <Row icon="users" title="Household and sync" sub={syncSub} onClick={() => app.push('household')} />
           <Row icon="filter" title="Categories" sub={`${allCategories().length} categories`} onClick={() => app.push('categories')} />
+          <Row icon="trash" title="Recently deleted" sub="Restore a recipe" onClick={() => app.push('trash')} />
         </ul>
         <h3 className="group-h">Your recipes</h3>
         <ul className="list">
@@ -184,6 +185,20 @@ export function Roadmap() {
   return (
     <Page title="Roadmap" onBack={app.back}>
       <ol className="roadmap">{ROADMAP.map((p) => <li key={p.n} className={p.status}><span className="tag">{p.status === 'done' ? 'Done' : p.status === 'next' ? 'Next' : 'Later'}</span><b>{p.n}. {p.name}</b><p>{p.items}</p>{p.needs && <small>Needs: {p.needs}</small>}</li>)}</ol>
+    </Page>
+  )
+}
+
+/** Deleted recipes are only hidden, so they can come back. */
+export function Trash() {
+  const app = useApp()
+  const store = useStore()
+  const gone = [...store.items.values()].filter((i) => i.kind === 'recipe' && i.deleted).sort((a, b) => (b.u || '').localeCompare(a.u || ''))
+  return (
+    <Page title="Recently deleted" onBack={app.back}>
+      {!gone.length ? <Empty icon="trash" title="Nothing deleted">Recipes you delete wait here.</Empty> : (
+        <ul className="list">{gone.map((r) => <li key={r.id} className="row"><span className="row-main static"><span className="row-text"><b>{r.name}</b><small>{r.source || ''}</small></span></span><button className="btn small" onClick={async () => { await restoreItem(r.id); app.toast(`${r.name} restored`) }}>Restore</button></li>)}</ul>
+      )}
     </Page>
   )
 }
