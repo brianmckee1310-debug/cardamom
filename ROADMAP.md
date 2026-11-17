@@ -126,12 +126,11 @@ what "it took a while" feels like. First load is also half what it was.
   field already said "servings".
 - The sticky action button at the foot of a sheet did not hide what scrolled under it.
 
-## Phase 7 — what real kitchen use turns up. Next. Opus 5, medium effort.
-Deferred from the old phase 6, to be reconsidered after a few weeks of actually cooking from it:
-month view on the planner, more than one grocery list, drag to reorder, and a week and month
-view of the log.
+## Phase 8 — Paprika parity, the rest. Next. Opus 5 or Fable 5.2, medium effort.
+Subcategories, drag to reorder, custom aisles and meal types, print layouts, a replacement for
+Paprika's in-app browser, and a week and month view of the food log.
 
-## Phase 8 — hands-free beyond cook mode. Later. Opus 5, medium effort.
+## Phase 9 — hands-free beyond cook mode. Later. Opus 5, medium effort.
 
 This replaces the Alexa skill, which is dropped. A custom Alexa skill (or a Google Assistant
 action) needs a developer account and a server to host the endpoint, which breaks the rule
@@ -182,8 +181,6 @@ benefit. 1 is the one to think about properly.
 - 8 leftover functions from the superseded design (`cardamom_create`, `cardamom_join`,
   `cardamom_feed`, `cardamom_pull`, `cardamom_push`, `cardamom_photo_get`,
   `cardamom_photo_ids`, `cardamom_photo_put`) are dead but still callable by `anon`. Drop them.
-- `dist/` and `docs/` still hold unreferenced asset files from earlier builds, because file
-  deletion is not available in these sessions. Harmless, but worth a tidy.
 
 ## Deploying from here
 Build, copy `dist/` over `docs/`, commit, push. Pages picks it up in about a minute.
