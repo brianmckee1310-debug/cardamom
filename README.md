@@ -10,7 +10,10 @@ Live at https://brianmckee1310-debug.github.io/cardamom/ (published from `docs/`
 - `npm run package` builds everything and writes `out/cardamom-site-<v>.zip` and the source zip
 - `npm run roadmap` prints the phases
 
-Deploy: build, copy `dist/` over `docs/`, commit and push. Pages serves `main` / `/docs`.
+Deploy: `bash tools/deploy.sh "Release vX.Y.Z"` — builds, publishes into `docs/`, scans for
+secrets, commits, and writes `out/deploy.bundle`. This folder is the git repo (tracks
+`origin/main`). Pushing is blocked from the sandbox, so Claude pushes the bundle from the
+cloud side, or you can push yourself from a Windows terminal. Pages serves `main` / `/docs`.
 Sync is live: Supabase URL and publishable key are baked in at build time via `VITE_SB_URL` and
 `VITE_SB_KEY` (both are safe to publish; the data is protected by row-level security).
 The Gemini key is NOT in this repo and must never be: it is entered per device under More.
