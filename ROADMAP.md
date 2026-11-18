@@ -19,7 +19,7 @@ Source on disk at `C:\Users\brian\Claude\Projects\Cardamom`
 | 9 | Hands-free | Done | |
 | 10 | Less scrolling: a recipe in tabs | Done | |
 | 11 | Mobile only | Done | |
-| 12 | Add to a list from Siri | Next | Opus 5, medium effort |
+| 12 | Add to a list by voice | Next | Opus 5, medium effort |
 
 ## Phase 11, done on 2026-11-17 — version 1.8.0
 
@@ -253,27 +253,49 @@ what "it took a while" feels like. First load is also half what it was.
   field already said "servings".
 - The sticky action button at the foot of a sheet did not hide what scrolled under it.
 
-## Phase 11 — add to a list from Siri. Next. Opus 5, medium effort.
+## Phase 12 — add to a list by voice. Next. Opus 5, medium effort.
 
-Brian asked whether he can add to a shopping list from Gemini or Siri. The honest answer is
-that Siri can, through iPhone Shortcuts, and Gemini cannot, because Cardamom is a web app
-rather than an installed Android app and Gemini's third-party actions are built on Android
-App Actions, which only a native app can declare.
+Brian's goal, in his words: hands full, moving around, screen off — "hey, add eggs to the
+grocery list". He has Android (Galaxy S23 Ultra), his wife has iPhone. He does not care
+whether it goes through Gemini; he cares that it works without touching the phone.
 
-What makes the Siri route work — and incidentally makes every other automation tool work too
-— is a small authenticated endpoint that accepts an item and a list name and writes it
-straight to the household's data. A Supabase edge function alongside the two already deployed.
-Then:
+### What the research settled, 2026-11-17
+The direct route is closed and will not reopen. Google removed Assistant triggers that take
+variable input on 2022-08-31, and removed conversational actions entirely, which is the
+machinery IFTTT and friends were built on. The Tasker workaround that survived that is now
+broken too: since Assistant was replaced by Gemini, binding a custom "hey Google" phrase to
+a third-party action does not reliably work by any method. So there is no supported Google
+path for a spoken phrase with a variable reaching a custom endpoint. Do not spend time
+looking for one again.
 
-- **iPhone**: a Shortcut of *Dictate Text* then *Get Contents of URL*, named "Add to
-  Cardamom". "Hey Siri, add to Cardamom" adds the item without opening anything.
-- **Android**: the same endpoint can be hit by Samsung's Modes and Routines, HTTP Shortcuts,
-  Tasker, or a home-screen bookmark. Gemini still cannot call it directly.
-- Anything else that can make a web request, including a browser bookmark on a laptop.
+### The build, in order
+1. **The endpoint.** A Supabase edge function alongside the two already deployed. Takes an
+   item and an optional list name, writes straight to the household's data. This is most of
+   the work and everything else depends on it.
+2. **Token.** Per-device, revocable from More. Each phone gets its own secret, so losing one
+   phone does not mean re-pasting on the other. Decided by Claude; Brian left it open.
+3. **iPhone (certain to work).** Shortcut: *Dictate Text* then *Get Contents of URL*, named
+   "Add to Cardamom". "Hey Siri, add to Cardamom" with the screen off.
+4. **Android (experiment, do this before promising anything).** Test whether a Bixby quick
+   command passes dictated text through to a web request. "Hi Bixby" wakes screen-off on the
+   S23 Ultra, and quick commands take a trigger phrase, but whether the spoken *item* reaches
+   the request is unconfirmed and documentation does not say. Twenty minutes on the real
+   phone answers it.
+5. **Android fallback, if Bixby will not pass text.** Bridge through a list app Google
+   natively supports: Brian says the normal Google phrase, Google writes to its own list,
+   Cardamom pulls it in on a timer. Supported and durable, so it will not break on the next
+   Gemini update, but it needs a Google sign-in and is not instant. Tasker with AutoVoice and
+   its own hotword is the other option — fully flexible, but a different wake word and it
+   listens continuously.
 
-Worth doing because it is small, and because it is the only route to true hands-free adding
-that does not need the app open. Needs care over the token: the endpoint writes to the
-household, so the secret in the Shortcut has to be per-household and revocable.
+### Lists
+Default to the weekly grocery list when no list is named. Brian's current Paprika lists:
+weekly grocery, hardware store, home goods, misc shopping, moonshot, party, and
+gifts/wants/non-essentials. Not a fixed set — the endpoint should match on whatever lists
+exist rather than hard-coding these.
+
+### Do not promise
+"Hey Google, add eggs" on Android, until step 4 has actually been run on Brian's phone.
 
 
 ## Older notes — checked on 2026-11-15
@@ -300,9 +322,10 @@ household, so the secret in the Shortcut has to be per-household and revocable.
 ## Outstanding
 - Create both accounts, create the household, join from the second phone.
 - Paste the Gemini key under More on each device and confirm the AI features.
-- 8 leftover functions from the superseded design (`cardamom_create`, `cardamom_join`,
-  `cardamom_feed`, `cardamom_pull`, `cardamom_push`, `cardamom_photo_get`,
-  `cardamom_photo_ids`, `cardamom_photo_put`) are dead but still callable by `anon`. Drop them.
+- ~~8 leftover functions from the superseded design~~ Checked 2026-11-17: already gone. The
+  database has exactly five `cardamom_` functions, all in use — `create_household` and
+  `join_household` (authenticated only), `is_member` and `hid` (RLS helpers, not granted),
+  and `touch` (a no-argument timestamp trigger). Nothing callable by `anon`.
 
 ## Deploying from here
 Build, copy `dist/` over `docs/`, commit, push. Pages picks it up in about a minute.
