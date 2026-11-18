@@ -73,3 +73,28 @@ drop policy if exists cardamom_photos_all on storage.objects;
 create policy cardamom_photos_all on storage.objects for all to authenticated
   using (bucket_id = 'cardamom-photos' and public.cardamom_is_member(((storage.foldername(name))[1])::uuid))
   with check (bucket_id = 'cardamom-photos' and public.cardamom_is_member(((storage.foldername(name))[1])::uuid));
+
+-- Per-device tokens for the voice "add to a list" endpoint (cardamom-add). One per phone, so
+-- losing a phone means revoking one token rather than re-pasting a new secret on the other.
+create table if not exists public.cardamom_tokens (
+  token text primary key default replace(gen_random_uuid()::text, '-', ''),
+  household_id uuid not null references public.cardamom_households on delete cascade,
+  label text not null,
+  created_by uuid not null default auth.uid(),
+  created_at timestamptz not null default now(),
+  last_used_at timestamptz
+);
+create index if not exists cardamom_tokens_household on public.cardamom_tokens (household_id);
+alter table public.cardamom_tokens enable row level security;
+drop policy if exists cardamom_tokens_select on public.cardamom_tokens;
+create policy cardamom_tokens_select on public.cardamom_tokens
+  for select using (public.cardamom_is_member(household_id));
+drop policy if exists cardamom_tokens_insert on public.cardamom_tokens;
+create policy cardamom_tokens_insert on public.cardamom_tokens
+  for insert with check (public.cardamom_is_member(household_id) and created_by = auth.uid());
+-- Revoking is a delete: gone means gone, no lingering row that might be re-enabled.
+drop policy if exists cardamom_tokens_delete on public.cardamom_tokens;
+create policy cardamom_tokens_delete on public.cardamom_tokens
+  for delete using (public.cardamom_is_member(household_id));
+revoke all on public.cardamom_tokens from anon;
+grant select, insert, delete on public.cardamom_tokens to authenticated;
