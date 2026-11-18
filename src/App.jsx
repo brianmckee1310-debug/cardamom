@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AppCtx, Icon, IconBtn, useWide } from './ui/bits.jsx'
+import { AppCtx, Icon, IconBtn } from './ui/bits.jsx'
 import { useStore, clearError, restoreItem, useSettings } from './store.js'
 import Recipes from './ui/Recipes.jsx'
 import RecipeView from './ui/RecipeView.jsx'
@@ -10,9 +10,11 @@ import Pantry, { Cookable } from './ui/Pantry.jsx'
 import Planner, { WeekGlance } from './ui/Planner.jsx'
 import { Menus, MenuView } from './ui/Menus.jsx'
 import FoodLog from './ui/FoodLog.jsx'
-import LogAdd, { LogEntry, LogTargets } from './ui/LogSheets.jsx'
+import LogAdd, { LogEntry, LogTargets, LogRange } from './ui/LogSheets.jsx'
 import { RecipePicker, AddToGroceries, AddToPlan, ItemEdit, AddToMenu } from './ui/Sheets.jsx'
 import { firstUrl } from './lib/importers.js'
+import VoiceButton from './ui/Voice.jsx'
+import { guessMeal } from './lib/log.js'
 
 // Split out of the first load: Import pulls in the zip reader, More pulls in the Supabase
 // client, Barcode pulls in the camera decoder. None of them is needed to show the library.
@@ -20,10 +22,10 @@ const ImportSheet = lazy(() => import('./ui/Import.jsx'))
 const Barcode = lazy(() => import('./ui/Barcode.jsx'))
 const More = lazy(() => import('./ui/More.jsx'))
 const named = (key) => lazy(() => import('./ui/More.jsx').then((m) => ({ default: m[key] })))
-const Household = named('Household'), Roadmap = named('Roadmap'), Categories = named('Categories'), Trash = named('Trash')
+const Household = named('Household'), Roadmap = named('Roadmap'), Categories = named('Categories'), Trash = named('Trash'), Aisles = named('Aisles'), MealTypes = named('MealTypes')
 
 const TABS = [['recipes', 'Recipes', 'book'], ['log', 'Log', 'bowl'], ['groceries', 'Groceries', 'cart'], ['planner', 'Planner', 'calendar'], ['pantry', 'Pantry', 'jar'], ['more', 'More', 'more']]
-const VIEWS = { recipe: RecipeView, edit: RecipeEdit, cook: CookMode, import: ImportSheet, menus: Menus, menu: MenuView, household: Household, roadmap: Roadmap, categories: Categories, barcode: Barcode, pick: RecipePicker, addToGroceries: AddToGroceries, addToPlan: AddToPlan, itemEdit: ItemEdit, addToMenu: AddToMenu, logAdd: LogAdd, logEntry: LogEntry, logTargets: LogTargets, weekGlance: WeekGlance, cookable: Cookable, trash: Trash }
+const VIEWS = { recipe: RecipeView, edit: RecipeEdit, cook: CookMode, import: ImportSheet, menus: Menus, menu: MenuView, household: Household, roadmap: Roadmap, categories: Categories, barcode: Barcode, pick: RecipePicker, addToGroceries: AddToGroceries, addToPlan: AddToPlan, itemEdit: ItemEdit, addToMenu: AddToMenu, logAdd: LogAdd, logEntry: LogEntry, logTargets: LogTargets, logRange: LogRange, weekGlance: WeekGlance, cookable: Cookable, trash: Trash, aisles: Aisles, mealTypes: MealTypes }
 const TAB_COMPONENTS = { recipes: Recipes, log: FoodLog, groceries: Grocery, planner: Planner, pantry: Pantry, more: More }
 const fmt = (s) => { s = Math.max(0, Math.ceil(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0') }
 
@@ -38,7 +40,6 @@ function beep() {
 export default function App() {
   const store = useStore()
   const settings = useSettings()
-  const wide = useWide()
   const [tab, setTab] = useState('recipes')
   const [stack, setStack] = useState([])
   const [toasts, setToasts] = useState([])
@@ -76,6 +77,32 @@ export default function App() {
     return () => clearInterval(i)
   }, [timers.length])
 
+  // The screen never sleeps while Cardamom is open. A phone propped against the toaster
+  // locking itself mid-recipe is the most annoying thing a cooking app can do, so this is
+  // simply on, with no setting. The lock drops when the app is hidden, so it costs nothing in
+  // the background, and is re-taken on the way back.
+  useEffect(() => {
+    let lock = null, on = true
+    const get = async () => { try { if (on && document.visibilityState === 'visible') lock = await navigator.wakeLock?.request('screen') } catch { /* denied or unsupported */ } }
+    get()
+    const vis = () => { if (document.visibilityState === 'visible') get() }
+    document.addEventListener('visibilitychange', vis)
+    return () => { on = false; document.removeEventListener('visibilitychange', vis); lock?.release?.().catch(() => {}) }
+  }, [])
+
+  // home-screen shortcuts and deep links land on the right screen, ready to go
+  useEffect(() => {
+    if (!store.ready) return // a ?cook= link needs the library loaded before it can find the recipe
+    const q = new URLSearchParams(location.search)
+    const tab = q.get('tab'), add = q.get('add'), log = q.get('log'), cook = q.get('cook')
+    if (!tab && !add && !log && !cook) return
+    history.replaceState({}, '', location.pathname)
+    if (tab) setTab(tab)
+    if (add) setTab('groceries')
+    if (log) { setTab('log'); push('logAdd', { date: new Date().toLocaleDateString('en-CA'), meal: guessMeal() }) }
+    if (cook) { const r = store.items.get(cook); if (r && !r.deleted) push('cook', { id: cook }) }
+  }, [store.ready])
+
   // links / text shared into the app from other apps (Android share sheet), or ?import=
   useEffect(() => {
     const q = new URLSearchParams(location.search)
@@ -84,14 +111,14 @@ export default function App() {
   }, [])
   useEffect(() => { document.documentElement.dataset.theme = settings.theme || 'auto' }, [settings.theme])
 
-  const ctx = useMemo(() => ({ push, back, replace, toast, removed, startTimer, setTab, wide }), [push, back, replace, toast, removed, startTimer, wide])
+  const ctx = useMemo(() => ({ push, back, replace, toast, removed, startTimer, setTab }), [push, back, replace, toast, removed, startTimer])
   // The pane is held by identity so pushing an overlay, firing a toast or ticking a timer does
   // not re-render a library of several hundred rows underneath it.
   const pane = useMemo(() => { const T = TAB_COMPONENTS[tab]; return <T /> }, [tab])
   if (!store.ready) return <div className="boot"><span className="spinner" /></div>
   return (
     <AppCtx.Provider value={ctx}>
-      <div className={`app ${wide ? 'wide' : ''}`}>
+      <div className="app">
         <nav className="tabs" aria-label="Sections">
           <div className="brand"><img src="./icon.svg" alt="" width="30" height="30" /><span>Cardamom</span></div>
           {TABS.map(([id, label, icon]) => (
@@ -110,6 +137,7 @@ export default function App() {
           </div>
         )}
         <Suspense fallback={null}>{stack.map((s) => { const V = VIEWS[s.type]; return V ? <V key={s.key} {...s.props} /> : null })}</Suspense>
+        <VoiceButton hidden={['cook', 'weekGlance'].includes(stack[stack.length - 1]?.type)} />
         <div className="toasts" aria-live="polite">
           {store.error && <div className="toast err"><span>{store.error}</span><button onClick={clearError}>OK</button></div>}
           {toasts.map((t) => <div className="toast" key={t.id}><span>{t.text}</span>{t.undo && <button onClick={() => { t.undo(); setToasts((x) => x.filter((y) => y.id !== t.id)) }}>Undo</button>}</div>)}

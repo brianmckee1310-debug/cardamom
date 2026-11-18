@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react'
 import { useKind, saveItem, saveItems, removeItem, getItem } from '../store.js'
-import { useApp, Sheet, Icon, IconBtn, Field, Busy, NumStepper, fmtDate, today } from './bits.jsx'
-import { NUTRIENTS, GROUPS, BY_KEY, HEADLINE, fmtKey, cleanNut, hasNut, nutText, scaleNut } from '../lib/nutrition.js'
-import { MEALS, guessMeal, myWho, recipeNut, targetRecord, targetFor, DEFAULT_TARGET } from '../lib/log.js'
+import { useApp, Sheet, Page, Icon, IconBtn, Field, Busy, NumStepper, fmtDate, today } from './bits.jsx'
+import { NUTRIENTS, GROUPS, BY_KEY, HEADLINE, fmtKey, cleanNut, hasNut, nutText, scaleNut, sumNut } from '../lib/nutrition.js'
+import { MEALS, guessMeal, myWho, recipeNut, targetRecord, targetFor, DEFAULT_TARGET, daySeries } from '../lib/log.js'
 import { matchNotables, notablesForRecipe, mergeNotables } from '../lib/notables.js'
 import { analyseNutrition, foodFromDescription } from '../lib/gemini.js'
 import { aiCfg, hasAi } from '../lib/importers.js'
 import { RecipeRow, searchRecipes } from './Recipes.jsx'
+import { Dictate } from './Voice.jsx'
 import { NotableCard } from './FoodLog.jsx'
 
 /**
@@ -126,6 +127,7 @@ export default function LogAdd({ date: d0, meal: m0, recipeId, draft: draft0 }) 
       {mode === 'describe' && !busy && (
         <form onSubmit={(e) => { e.preventDefault(); describe() }}>
           <Field label="What did you eat?" hint="Amounts help: a cup, two slices, a handful."><textarea rows={4} autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="A bowl of oatmeal with blueberries and a spoon of peanut butter" /></Field>
+          <div className="rowline"><Dictate label="Say what you ate" onText={(t) => setText((v) => (v ? v + ' ' + t : t))} /><span className="muted small grow">Or dictate it.</span></div>
           <button className="btn primary block" disabled={text.trim().length < 3}>Work it out</button>
         </form>
       )}
@@ -226,5 +228,56 @@ export function LogTargets() {
         <button className="btn primary grow" onClick={save}>Save</button>
       </div>
     </Sheet>
+  )
+}
+
+const dayAdd = (date, n) => { const d = new Date(date + 'T12:00'); d.setDate(d.getDate() + n); return fmtDate(d) }
+
+/** A week or a month of the log at once: what was eaten each day, and the averages under it. */
+export function LogRange({ date = today(), span: s0 = 'week' }) {
+  const app = useApp()
+  useKind('logentry')
+  const who = myWho()
+  const [span, setSpan] = useState(s0)
+  const [end, setEnd] = useState(date)
+  const n = span === 'week' ? 7 : 30
+  const dates = useMemo(() => Array.from({ length: n }, (_, i) => dayAdd(end, i - n + 1)), [end, n])
+  const series = daySeries(dates, who)
+  const logged = series.filter((d) => d.entries.length)
+  const target = targetFor(who)
+  const avg = (k) => (logged.length ? sumNut(logged.map((d) => d.totals))[k] / logged.length : null)
+  const peak = Math.max(target.calories, ...series.map((d) => d.totals.calories || 0), 1)
+  const label = `${new Date(dates[0] + 'T12:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(end + 'T12:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+  return (
+    <Page title="Over time" onBack={app.back}>
+      <div className="planbar">
+        <div className="seg slim"><button className={span === 'week' ? 'on' : ''} onClick={() => setSpan('week')}>Week</button><button className={span === 'month' ? 'on' : ''} onClick={() => setSpan('month')}>Month</button></div>
+        <IconBtn icon="back" label="Earlier" onClick={() => setEnd(dayAdd(end, -n))} />
+        <button className="btn small" onClick={() => setEnd(today())}>Now</button>
+        <IconBtn icon="chevron" label="Later" onClick={() => setEnd(dayAdd(end, n))} />
+      </div>
+      <p className="hint">{label} · {logged.length} day{logged.length === 1 ? '' : 's'} logged</p>
+      <section className="card">
+        <div className="sparkwrap">
+          <div className={`spark ${span}`}>
+            {series.map((d) => {
+              const c = d.totals.calories || 0
+              return <span key={d.date} className={`spark-col ${c > target.calories ? 'over' : ''}`} title={`${new Date(d.date + 'T12:00').toLocaleDateString()}: ${Math.round(c)}`}>{c > 0 && <i style={{ height: `${Math.max((c / peak) * 100, 2)}%` }} />}</span>
+            })}
+          </div>
+          <div className="spark-goal" style={{ bottom: `${(target.calories / peak) * 100}%` }} />
+        </div>
+        <p className="muted small">Each bar is a day; the line is your {target.calories} calorie target.</p>
+      </section>
+      {logged.length > 0 ? (
+        <section className="card">
+          <h3>Daily average, on the days you logged</h3>
+          <ul className="avgs">{[['calories', 'Calories'], ['protein_g', 'Protein'], ['carbohydrates_g', 'Carbs'], ['fat_g', 'Fat'], ['fiber_g', 'Fiber']].map(([k, short]) => (
+            <li key={k}><b>{fmtKey(k, avg(k))}</b><small>{short}</small></li>
+          ))}</ul>
+          <p className="muted small">Averaging only the days with something logged — blank days would drag it down and tell you nothing.</p>
+        </section>
+      ) : <p className="muted pad">Nothing logged in this stretch.</p>}
+    </Page>
   )
 }

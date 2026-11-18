@@ -144,11 +144,16 @@ const AISLES = [
   ['Beverages', /\b(beer|coffee|juice|soda|sparkling|tea|wine|vodka|rum|bourbon|whiskey|tequila)/i],
   ['Pantry', /\b(bean|broth|stock|can|canned|chickpea|coconut milk|honey|jam|ketchup|lentil|maple|mayo|mustard|noodle|nut|oat|oil|olive|pasta|peanut|quinoa|rice|sauce|soy|spaghetti|syrup|tahini|tomato|vinegar|orzo|gnocchi|panko|breadcrumb|miso|nori|salsa|chips)/i],
 ]
-export function guessAisle(name) {
-  for (const [aisle, re] of AISLES) if (re.test(name)) return aisle
-  return 'Other'
-}
 export const AISLE_ORDER = ['Produce', 'Meat & Seafood', 'Dairy & Eggs', 'Bakery', 'Pantry', 'Spices & Baking', 'Frozen', 'Beverages', 'Household', 'Other']
+/** The aisles in use: the shop's own order if one has been set, otherwise the built-in list. */
+export const aisleList = (settings) => (settings?.aisles?.length ? settings.aisles : AISLE_ORDER)
+/** Guess an aisle, but never one that is not on the list being used. */
+export function guessAisle(name, aisles) {
+  const list = aisles?.length ? aisles : AISLE_ORDER
+  for (const [aisle, re] of AISLES) if (re.test(name)) return list.includes(aisle) ? aisle : fallbackAisle(list)
+  return fallbackAisle(list)
+}
+export const fallbackAisle = (list) => (list?.includes('Other') ? 'Other' : list?.[list.length - 1] || 'Other')
 
 /** "2 cups chopped yellow onion, divided" -> { qty:'2 cups', name:'chopped yellow onion' } */
 export function groceryFromLine(line) {

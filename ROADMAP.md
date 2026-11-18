@@ -1,6 +1,6 @@
 # Cardamom roadmap
 
-Personal Paprika-style recipe manager for Brian and his wife. Updated 2026-11-16, version 1.4.0.
+Personal Paprika-style recipe manager for Brian and his wife. Updated 2026-11-17, version 1.8.0.
 
 Live at https://brianmckee1310-debug.github.io/cardamom/
 Code at https://github.com/brianmckee1310-debug/cardamom (Pages serves `main` / `/docs`)
@@ -15,8 +15,135 @@ Source on disk at `C:\Users\brian\Claude\Projects\Cardamom`
 | 5 | Daily food log | Done | |
 | 6 | Polish and the first shared build | Done | |
 | 7 | Shopping and planning upgrade | Done | |
-| 8 | Paprika parity, the rest: subcategories, drag to reorder, custom aisles and meal types, a replacement for the in-app browser | Next | Opus 5 or Fable 5.2, medium effort |
-| 9 | Hands-free beyond cook mode | Later | Opus 5, medium effort |
+| 8 | Paprika parity, the rest | Done | |
+| 9 | Hands-free | Done | |
+| 10 | Less scrolling: a recipe in tabs | Done | |
+| 11 | Mobile only | Done | |
+| 12 | Add to a list from Siri | Next | Opus 5, medium effort |
+
+## Phase 11, done on 2026-11-17 — version 1.8.0
+
+Brian: "I have never and will never use Cardamom on PC, this is mobile-only."
+
+- **The desktop layout is gone.** The sidebar rail, the two-column recipe and the wide-screen
+  grid have been deleted rather than left to rot. On anything wider than a phone the app is
+  now the phone layout centred in a 480px column, tab bar and all, so there is exactly one
+  layout and it is the one that gets the attention.
+- **Every tap target is at least 44px** in its short dimension — the size a finger hits
+  reliably. An audit of thirteen screens at 412px (a Galaxy S23 Ultra) and again at 360px
+  found 30 controls under that: segmented controls at 32px, the list chips and pill buttons
+  at 33–34px, Have it / Need it at 34px, the dictate button at 38px, drag handles 34px wide,
+  ingredient lines at 39px, and the rating stars at 20×20. All fixed by growing the padding
+  rather than the ink, so nothing looks heavier.
+- **The recipe page gives its top to the content.** The name is in the bar above, which stays
+  put while you scroll, so the heading on the page is smaller and the spacing tighter —
+  roughly 40px less before the ingredients start.
+
+### Checked
+Thirteen screens audited at 412px and 360px for overflow, tap-target size and header
+crowding: no problems at either width, no console errors. The recipe-tab run was re-checked
+and extended to assert the new behaviour on a big screen — one pane at a time, centred column,
+tab bar aligned to it. 97 unit tests still pass.
+
+### Not verified
+A real phone, as ever. The audit measures CSS pixels in a desktop browser pretending to be a
+phone; it cannot tell you whether something feels cramped in your hand.
+
+## Phase 10, done on 2026-11-17 — version 1.7.0
+
+Brian: "I prefer how Paprika has an ingredients tab and a directions tab. I loathe scrolling
+down screens."
+
+- **A recipe is tabbed on a phone**: Ingredients · Directions · More. Notes, nutrition and
+  What's in it moved into More, which only appears when there is something in it.
+- **The tabs are sticky** and switching scrolls them to the top, so tapping Directions puts
+  step one on screen rather than wherever you happened to be scrolled to.
+- **Nothing changed on a wide screen**, where the two columns already sat side by side, and
+  printing still puts the whole recipe on the page.
+
+Measured on a seeded recipe with 14 ingredients and 10 steps at 384px: one tab is 952px of
+scroll against 1949px for the whole recipe at once.
+
+### Checked
+A browser run of 13 checks at phone and desktop width: which pane shows, the first step being
+visible after a switch, the sticky behaviour, the More tab appearing only when it has content,
+printing showing both halves, and nothing overflowing. No console errors.
+
+## Phase 9, done on 2026-11-17 — version 1.6.0
+
+- **A microphone on every screen**, bottom right. One tap, one sentence, one thing done — not
+  an always-on assistant, which would cost battery and mean a hot mic in the kitchen. It says
+  back what it did, so you do not have to look. What it understands:
+  *add batteries* · *add two pounds of carrots to Costco* · *start a 12 minute timer* ·
+  *set a timer for an hour and a half* · *cook the turkey chili* · *open baked ziti* ·
+  *show me the pantry* · *log a bowl of oatmeal* · *what's for dinner*.
+- **Which list a spoken item lands on.** Brian's call: anything unnamed goes to the default
+  Groceries list wherever you are in the app, and naming a list in the sentence sends it there
+  instead. If it hears a list name that does not exist it says so rather than guessing, and
+  spoken items merge with what is already on the list the same way typed ones do.
+- **Home-screen shortcuts.** Long-press the icon for *Speak a command*, *Grocery list* or
+  *Log what I ate*. These are deep links (`?voice=1`, `?tab=groceries`, `?log=1`, `?cook=<id>`),
+  so they work as plain links too.
+- **Dictation** beside the grocery add box and the describe-what-you-ate box, for when a
+  command is overkill and you just want to talk into a field.
+- **The screen never sleeps.** Always on, no setting, everywhere in the app — not just cook
+  mode, which is where it used to stop. The lock is released while the app is in the
+  background and re-taken when you come back, so it costs nothing when you are not looking.
+
+### Checked
+97 unit tests, 25 of them on the command language alone: list routing, unknown list names,
+durations in words and digits, timer-versus-item precedence, recipe matching (including the
+case where two recipes match and the shorter name has to win), tabs, and the spoken
+confirmations. A browser run covering the mic's position, that it never sits over a list row
+even at the end of a 40-item list, the dictation buttons, all four deep links, the manifest
+shortcuts, and the mic hiding itself in cook mode. No console errors.
+
+### Not verified
+Actual speech. The browser will not hand a synthetic transcript to a page, so everything from
+the microphone down to the transcript is untested here — the command layer underneath it is
+tested hard, but whether Chrome on your phone hears "add two pounds of carrots to Costco"
+correctly is something only you can tell me. Also unverified: whether Android honours the wake
+lock in the installed PWA, and the home-screen shortcuts, which need a real install.
+
+### Known limits
+Speech recognition needs a network connection and is Chrome-only on Android; on iOS Safari
+there is no Web Speech support, so the mic will say the browser cannot listen. Logging food by
+voice goes through Gemini, so it needs the key; without it, it opens the log for you instead.
+
+## Phase 8, done on 2026-11-17 — version 1.5.0
+
+- **Subcategories.** A category with `Parent > Child` in its name nests. The picker shows a
+  tree you expand and collapse; a parent counts and shows everything beneath it, however deep.
+  Renaming carries the children: `Dinner` to `Supper` moves `Dinner > Pasta` with it, and
+  re-parenting is just renaming `Soup` to `Dinner > Soup`. A branch cannot be moved inside
+  itself. Nothing needed migrating — the stored shape is still a flat list of strings.
+- **Drag to reorder**, by a handle so a tap still does what it always did. Three places: the
+  aisles, the meal types, and grocery items within their aisle (hand order survives a reload
+  and beats alphabetical). Planner days with more than one meal can be dragged too. The handle
+  is also a button: focus it and the arrow keys move the row, for anyone not dragging.
+- **Aisles are yours.** More → Aisles: add, rename, delete, drag into the order you walk the
+  shop. That order is the order the grocery list groups in. Renaming an aisle moves everything
+  in it; deleting one moves its items to the last aisle rather than losing them.
+- **Meal types are yours.** More → Meal types, same handling, and they drive the planner slots
+  and the order meals sit in on a day.
+- **Printing.** Beyond a recipe, the grocery list and the planner now print: the tab bar,
+  search, buttons and drag handles drop out, cards avoid breaking across pages, and purchased
+  items are left off a printed shopping list. Print is in the Groceries list actions and the
+  Planner menu.
+- **The log over time.** Log → ⋯ → Week and month view: a bar per day against your calorie
+  target, and the daily averages for calories, protein, carbs, fat and fiber. Averages count
+  only the days you logged, since blank days would drag them down and say nothing.
+
+### Checked
+86 unit tests. A scripted phone-width walk-through: 30 checks covering the tree, re-parenting,
+dragging with a real mouse drag, keyboard reordering, rename-carries-items, order surviving a
+reload, the print stylesheet, and the log chart arithmetic. No console errors, nothing
+overflowing. Screens looked at in light and dark.
+
+### Not verified
+Dragging with a finger on a real phone — it is built on pointer events and tested with a mouse
+drag, which is the same code path, but the feel of it is not something a test can tell you.
+Printing was checked by switching the browser to print media, not by printing on paper.
 
 ## Phase 7, done on 2026-11-16 — version 1.4.0
 
@@ -126,35 +253,30 @@ what "it took a while" feels like. First load is also half what it was.
   field already said "servings".
 - The sticky action button at the foot of a sheet did not hide what scrolled under it.
 
-## Phase 8 — Paprika parity, the rest. Next. Opus 5 or Fable 5.2, medium effort.
-Subcategories, drag to reorder, custom aisles and meal types, print layouts, a replacement for
-Paprika's in-app browser, and a week and month view of the food log.
+## Phase 11 — add to a list from Siri. Next. Opus 5, medium effort.
 
-## Phase 9 — hands-free beyond cook mode. Later. Opus 5, medium effort.
+Brian asked whether he can add to a shopping list from Gemini or Siri. The honest answer is
+that Siri can, through iPhone Shortcuts, and Gemini cannot, because Cardamom is a web app
+rather than an installed Android app and Gemini's third-party actions are built on Android
+App Actions, which only a native app can declare.
 
-This replaces the Alexa skill, which is dropped. A custom Alexa skill (or a Google Assistant
-action) needs a developer account and a server to host the endpoint, which breaks the rule
-that everything stays free. These three get most of the same result with what is already here
-— the Web Speech API the cook mode voice control already uses, and the phone itself.
+What makes the Siri route work — and incidentally makes every other automation tool work too
+— is a small authenticated endpoint that accepts an item and a list name and writes it
+straight to the household's data. A Supabase edge function alongside the two already deployed.
+Then:
 
-1. **Listening from any screen.** Lift the cook-mode voice listener up to the whole app, with
-   a mic in the title bar and commands for the things you would want your hands free for:
-   "add butter to the groceries", "log a bowl of oatmeal", "start a 12 minute timer", "open
-   the short ribs". Free, no account, runs on the phone. The largest of the three.
-   *Opus 5, medium effort.*
-2. **Landing straight in hands-free.** Manifest shortcuts and deep links (`?cook=<recipe>`,
-   `?add=groceries`, `?log=1`), so long-pressing the icon, a home-screen shortcut, or telling
-   the phone to open Cardamom drops you on the right screen with the mic already live. No
-   server, nothing to sign up for, and it is what makes option 1 worth having mid-recipe.
-   *Opus 5, low effort.*
-3. **Dictation into the fields that matter.** A mic beside the describe-what-you-ate box, the
-   grocery add box and the recipe notes, so a sticky-handed entry is spoken rather than typed.
-   Smallest of the three and useful on its own. *Opus 5, low effort.*
+- **iPhone**: a Shortcut of *Dictate Text* then *Get Contents of URL*, named "Add to
+  Cardamom". "Hey Siri, add to Cardamom" adds the item without opening anything.
+- **Android**: the same endpoint can be hit by Samsung's Modes and Routines, HTTP Shortcuts,
+  Tasker, or a home-screen bookmark. Gemini still cannot call it directly.
+- Anything else that can make a web request, including a browser bookmark on a laptop.
 
-Worth scoping 2 and 3 together first: they are cheap and they are most of the day-to-day
-benefit. 1 is the one to think about properly.
+Worth doing because it is small, and because it is the only route to true hands-free adding
+that does not need the app open. Needs care over the token: the endpoint writes to the
+household, so the secret in the Shortcut has to be per-household and revocable.
 
-## Checked on 2026-11-15
+
+## Older notes — checked on 2026-11-15
 - 60 unit tests pass (51 from before, plus 9 new covering typed amounts, the stepper ladder,
   bounds and junk input, scaling a line by a typed factor, and the portion wording).
 - A scripted browser walk at 384px in light and dark and at 1280px: library, recipe, scale

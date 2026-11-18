@@ -1,6 +1,6 @@
 // Grocery-list arithmetic, kept pure so it can be tested without a browser:
 // matching item names, combining duplicates, and ranking recipes against the pantry.
-import { parseIngredient, formatNumber, splitLines, isHeader, groceryFromLine } from './ingredients.js'
+import { parseIngredient, formatNumber, splitLines, isHeader, groceryFromLine, guessAisle } from './ingredients.js'
 
 const FILLER = /\b(fresh|freshly|large|small|medium|chopped|diced|minced|sliced|grated|shredded|ground|dried|boneless|skinless|whole|raw|ripe|of|finely|roughly|thinly|peeled|cooked|unsalted|salted|extra|virgin|organic)\b/g
 /** "2 Fresh Yellow Onions" and "yellow onion" are the same thing on a shopping list. */
@@ -77,4 +77,10 @@ export function cookable(recipes, pantry, limit = 60) {
     if (got / need.length >= 0.5) out.push({ recipe: r, total: need.length, got, missing })
   }
   return out.sort((a, b) => a.missing.length - b.missing.length || b.got / b.total - a.got / a.total || a.recipe.name.localeCompare(b.recipe.name)).slice(0, limit)
+}
+
+/** A typed or spoken line turned into a list item: "2 lb carrots" -> qty and name, with an aisle. */
+export const quickItem = (text, kind, aisles) => {
+  const g = parseIngredient(text).qty != null ? groceryFromLine(text) : { qty: '', name: String(text || '').trim() }
+  return { kind, name: g.name, qty: g.qty, aisle: guessAisle(g.name, aisles) }
 }

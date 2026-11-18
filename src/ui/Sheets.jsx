@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react'
-import { useKind, getItem, saveItems, saveItem, removeItem, listKind, useSettings, setSetting } from '../store.js'
+import { useKind, getItem, saveItems, saveItem, removeItem, listKind, useSettings, setSetting, getSettings } from '../store.js'
 import { mergeIntoList, looseMatch } from '../lib/grocery.js'
 import { useDoubleTap } from './Grocery.jsx'
 import { useApp, Sheet, Icon, Field, fmtDate, today } from './bits.jsx'
 import { RecipeRow, searchRecipes } from './Recipes.jsx'
-import { splitLines, scaleLine, isHeader, groceryFromLine, guessAisle, AISLE_ORDER } from '../lib/ingredients.js'
-import { MEAL_TYPES } from '../lib/ics.js'
+import { splitLines, scaleLine, isHeader, groceryFromLine, guessAisle, aisleList } from '../lib/ingredients.js'
+import { mealTypeList } from '../lib/ics.js'
 
 export const inPantry = (name, pantry) => pantry.some((p) => p.inStock !== false && looseMatch(name, p.name))
 
@@ -47,7 +47,7 @@ export function AddToGroceries({ recipeIds, factor = 1 }) {
   const picked = lines.filter((l) => state[l.i] !== 'off')
   const add = async () => {
     const existing = listKind('grocery').filter((e) => (e.list || '') === list)
-    const out = mergeIntoList(existing, picked.map((l) => ({ kind: 'grocery', name: l.name, qty: l.qty, aisle: guessAisle(l.name), recipe: l.recipe.name, recipeId: l.recipe.id, done: false, check: state[l.i] === 'check', list: list || undefined })))
+    const out = mergeIntoList(existing, picked.map((l) => ({ kind: 'grocery', name: l.name, qty: l.qty, aisle: guessAisle(l.name, aisleList(settings)), recipe: l.recipe.name, recipeId: l.recipe.id, done: false, check: state[l.i] === 'check', list: list || undefined })))
     await saveItems(out)
     const combined = picked.length - out.filter((o) => !o.id).length
     if (picked.some((l) => state[l.i] === 'check') && !settings.usedCheck) setSetting('usedCheck', true)
@@ -78,9 +78,10 @@ export function AddToGroceries({ recipeIds, factor = 1 }) {
 
 export function AddToPlan({ recipeId, date, meal }) {
   const app = useApp()
+  const settings = useSettings()
   const r = recipeId ? getItem(recipeId) : meal?.recipeId ? getItem(meal.recipeId) : null
   const [d, setD] = useState(meal?.date || date || today())
-  const [type, setType] = useState(meal?.type || 'Dinner')
+  const [type, setType] = useState(meal?.type || (mealTypeList(getSettings()).includes('Dinner') ? 'Dinner' : mealTypeList(getSettings())[0]))
   const [title, setTitle] = useState(meal?.title || r?.name || '')
   const [note, setNote] = useState(meal?.note || '')
   const save = async () => {
@@ -96,7 +97,7 @@ export function AddToPlan({ recipeId, date, meal }) {
       <div className="daychips">{quick.map((x) => <button key={fmtDate(x)} className={d === fmtDate(x) ? 'on' : ''} onClick={() => setD(fmtDate(x))}><small>{x.toLocaleDateString(undefined, { weekday: 'short' })}</small><b>{x.getDate()}</b></button>)}</div>
       <Field label="Other date"><input type="date" value={d} onChange={(e) => setD(e.target.value)} /></Field>
       <span className="field-label">Meal</span>
-      <div className="seg">{MEAL_TYPES.map((t) => <button key={t} className={type === t ? 'on' : ''} onClick={() => setType(t)}>{t}</button>)}</div>
+      <div className="seg wrap">{mealTypeList(settings).map((t) => <button key={t} className={type === t ? 'on' : ''} onClick={() => setType(t)}>{t}</button>)}</div>
       <Field label="Note"><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" /></Field>
       <div className="rowline">
         {meal && <button className="btn danger" onClick={async () => { await removeItem(meal.id); app.back(); app.removed('Meal removed', meal.id) }}>Remove</button>}
@@ -132,8 +133,9 @@ export function ItemEdit({ item }) {
       <Field label="Name"><input value={x.name} onChange={up('name')} autoFocus={!item.id} /></Field>
       <div className="grid2">
         <Field label="Amount"><input value={x.qty || ''} onChange={up('qty')} /></Field>
-        <Field label="Aisle"><select value={x.aisle || 'Other'} onChange={up('aisle')}>{AISLE_ORDER.map((a) => <option key={a}>{a}</option>)}</select></Field>
+        
       </div>
+      {!pantry && <Field label="Aisle"><select value={x.aisle || 'Other'} onChange={up('aisle')}>{aisleList(getSettings()).map((a) => <option key={a}>{a}</option>)}</select></Field>}
       {!pantry && lists.length > 0 && <Field label="List"><select value={x.list || ''} onChange={(e) => setX((v) => ({ ...v, list: e.target.value || undefined }))}><option value="">Groceries</option>{lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></Field>}
       {pantry && <Field label="Use by"><input type="date" value={x.expires || ''} onChange={up('expires')} /></Field>}
       <div className="rowline">

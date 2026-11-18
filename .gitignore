@@ -5,3 +5,4 @@ out/
 test-results/
 shots/
 *.zip
+.env

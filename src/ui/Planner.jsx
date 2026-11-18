@@ -1,7 +1,9 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useKind, useSettings, setSetting, saveItems, getItem } from '../store.js'
+
 import { useApp, Icon, IconBtn, Sheet, fmtDate, today } from './bits.jsx'
-import { MEAL_TYPES, buildIcs } from '../lib/ics.js'
+import { mealTypeList, buildIcs } from '../lib/ics.js'
+import DragList from './DragList.jsx'
 import { download } from './RecipeView.jsx'
 
 const noon = (d) => { const x = new Date(d); x.setHours(12, 0, 0, 0); return x }
@@ -14,13 +16,21 @@ const live = (id) => { const r = id && getItem(id); return r && !r.deleted ? r :
 
 function useMealsByDay() {
   const meals = useKind('meal')
-  const byDay = useMemo(() => { const m = new Map(); for (const x of meals) { if (!m.has(x.date)) m.set(x.date, []); m.get(x.date).push(x) } for (const l of m.values()) l.sort((a, b) => MEAL_TYPES.indexOf(a.type) - MEAL_TYPES.indexOf(b.type)); return m }, [meals])
-  return { meals, byDay }
+  const types = mealTypeList(useSettings())
+  // Meal type decides the order, unless a day has been hand-sorted, which wins.
+  const byDay = useMemo(() => { const m = new Map(); for (const x of meals) { if (!m.has(x.date)) m.set(x.date, []); m.get(x.date).push(x) } for (const l of m.values()) l.sort((a, b) => (a.ord ?? 1e9) - (b.ord ?? 1e9) || (types.indexOf(a.type) + 1 || 99) - (types.indexOf(b.type) + 1 || 99)); return m }, [meals, types.join()])
+  return { meals, byDay, types }
 }
 
 function DayCard({ d, list }) {
   const app = useApp()
   const key = fmtDate(d)
+  const mealRow = (m) => (
+    <>
+      <button className="meal-main" onClick={() => live(m.recipeId) ? app.push('recipe', { id: m.recipeId }) : app.push('addToPlan', { meal: m })}><small>{m.type}</small><b>{m.title}</b>{m.note && <i>{m.note}</i>}</button>
+      <IconBtn icon="edit" label={`Edit ${m.title}`} onClick={() => app.push('addToPlan', { meal: m })} />
+    </>
+  )
   const addRecipes = () => app.push('pick', { title: 'Plan which recipes?', onPick: async (ids) => { await saveItems(ids.map((id) => ({ kind: 'meal', date: key, type: 'Dinner', recipeId: id, title: getItem(id).name }))); app.toast(`${ids.length} planned`) } })
   return (
     <section className={`day ${key === today() ? 'today' : ''}`}>
@@ -28,12 +38,9 @@ function DayCard({ d, list }) {
         <IconBtn icon="book" label={`Add recipes to ${weekday(d)}`} onClick={addRecipes} />
         <IconBtn icon="plus" label={`Add note to ${weekday(d)}`} onClick={() => app.push('addToPlan', { date: key })} />
       </header>
-      {list.map((m) => (
-        <div className="meal" key={m.id}>
-          <button className="meal-main" onClick={() => live(m.recipeId) ? app.push('recipe', { id: m.recipeId }) : app.push('addToPlan', { meal: m })}><small>{m.type}</small><b>{m.title}</b>{m.note && <i>{m.note}</i>}</button>
-          <IconBtn icon="edit" label={`Edit ${m.title}`} onClick={() => app.push('addToPlan', { meal: m })} />
-        </div>
-      ))}
+      {list.length > 1
+        ? <DragList className="plain bare" items={list} itemClass="meal" labelOf={(m) => m.title} onReorder={(next) => saveItems(next.map((m, n) => ({ ...m, ord: n })))} renderItem={mealRow} />
+        : list.map((m) => <div className="meal" key={m.id}>{mealRow(m)}</div>)}
       {!list.length && <p className="day-empty">Nothing planned</p>}
     </section>
   )
@@ -101,6 +108,8 @@ export default function Planner() {
           <div className="menu">
             {view === 'week' && <button disabled={!weekRecipeIds.length} onClick={() => { setMenu(false); toGroceries() }}><Icon name="cart" />Add this week to groceries</button>}
             {view === 'week' && <button onClick={() => { setMenu(false); app.push('weekGlance', { start: fmtDate(start) }) }}><Icon name="expand" />Week at a glance</button>}
+            <button onClick={() => { setMenu(false); setTimeout(() => window.print(), 250) }}><Icon name="printer" />Print {view === 'week' ? 'this week' : 'this month'}</button>
+            <button onClick={() => { setMenu(false); app.push('mealTypes') }}><Icon name="calendar" />Meal types and their order</button>
             <button onClick={() => { setMenu(false); app.push('menus') }}><Icon name="menu" />Add a saved menu</button>
             <button disabled={!meals.length} onClick={() => { setMenu(false); download('cardamom-meals.ics', buildIcs(meals), 'text/calendar') }}><Icon name="calendar" />Download calendar file</button>
             {view === 'week' && <button disabled={!week.length} className="danger" onClick={async () => { setMenu(false); await saveItems(week.map((m) => ({ ...m, deleted: true }))); app.removed('Week cleared', week.map((m) => m.id)) }}><Icon name="trash" />Clear this week</button>}

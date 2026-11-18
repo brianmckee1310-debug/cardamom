@@ -1,17 +1,19 @@
 import React, { useMemo, useState } from 'react'
-import { useKind, saveItem } from '../store.js'
+import { useKind, saveItem, useSettings } from '../store.js'
 import { useApp, Icon, IconBtn, Empty, today } from './bits.jsx'
-import { AISLE_ORDER } from '../lib/ingredients.js'
-import { groupBy, quickItem } from './Grocery.jsx'
+import { aisleList } from '../lib/ingredients.js'
+import { groupBy } from './Grocery.jsx'
+import { quickItem } from '../lib/grocery.js'
 import { cookable } from '../lib/grocery.js'
 import { Page } from './bits.jsx'
 
 export default function Pantry() {
   const app = useApp()
   const items = useKind('pantry')
+  const settings = useSettings()
   const [text, setText] = useState('')
-  const groups = useMemo(() => groupBy([...items].sort((a, b) => a.name.localeCompare(b.name)), (i) => i.aisle || 'Other', AISLE_ORDER), [items])
-  const add = async (e) => { e.preventDefault(); if (!text.trim()) return; await saveItem({ ...quickItem(text, 'pantry'), inStock: true }); setText('') }
+  const groups = useMemo(() => groupBy([...items].sort((a, b) => a.name.localeCompare(b.name)), (i) => i.aisle || 'Other', aisleList(settings)), [items])
+  const add = async (e) => { e.preventDefault(); if (!text.trim()) return; await saveItem({ ...quickItem(text, 'pantry', aisleList(settings)), inStock: true }); setText('') }
   const soon = (d) => d && d <= new Date(Date.now() + 5 * 864e5).toLocaleDateString('en-CA')
   return (
     <>

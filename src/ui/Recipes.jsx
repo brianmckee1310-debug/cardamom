@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useKind, useThumb, prewarmPhoto, allCategories, useSettings, setSetting } from '../store.js'
 import { useApp, Icon, IconBtn, Stars, Empty, Sheet } from './bits.jsx'
+import { categoryTree, visibleNodes, hasChildren, inCategory, leaf, ancestors } from '../lib/categories.js'
 
 const SORTS = [['name', 'Name'], ['new', 'Newest'], ['rating', 'Rating'], ['time', 'Quickest']]
 const mins = (s) => { if (!s) return 9e9; let t = 0; const h = s.match(/(\d+(?:\.\d+)?)\s*h/i), m = s.match(/(\d+)\s*m/i); if (h) t += parseFloat(h[1]) * 60; if (m) t += +m[1]; return t || 9e9 }
@@ -58,7 +59,7 @@ export default function Recipes() {
     let list = recipes
     if (cat === 'fav') list = list.filter((r) => r.favorite)
     else if (cat === 'none') list = list.filter((r) => !(r.categories || []).length)
-    else if (cat !== 'all') list = list.filter((r) => (r.categories || []).includes(cat))
+    else if (cat !== 'all') list = list.filter((r) => inCategory(r, cat))
     list = searchRecipes(list, q)
     const by = { name: (a, b) => a.name.localeCompare(b.name), new: (a, b) => (b.created || '').localeCompare(a.created || ''), rating: (a, b) => (b.rating || 0) - (a.rating || 0) || a.name.localeCompare(b.name), time: (a, b) => mins(a.total_time || a.cook_time) - mins(b.total_time || b.cook_time) }
     return [...list].sort(by[sort])
@@ -66,7 +67,7 @@ export default function Recipes() {
   useEffect(() => setLimit(60), [q, cat, sort])
   const more = useRef(null)
   useEffect(() => { if (!more.current) return; const io = new IntersectionObserver((e) => e[0].isIntersecting && setLimit((l) => l + 80), { rootMargin: '600px' }); io.observe(more.current); return () => io.disconnect() }, [shown.length > limit])
-  const title = cat === 'all' ? 'Recipes' : cat === 'fav' ? 'Favorites' : cat === 'none' ? 'Uncategorized' : cat
+  const title = cat === 'all' ? 'Recipes' : cat === 'fav' ? 'Favorites' : cat === 'none' ? 'Uncategorized' : leaf(cat)
   return (
     <>
       <header className="top">
@@ -95,16 +96,34 @@ export default function Recipes() {
           {shown.length > limit && <li ref={more} className="row more-row">Loading more</li>}
         </ul>
       </>)}
-      {picking && (
-        <Sheet title="Categories" onClose={() => setPicking(false)} tall>
-          <ul className="list plain">
-            {[['all', 'All recipes', recipes.length], ['fav', 'Favorites', recipes.filter((r) => r.favorite).length], ['none', 'Uncategorized', recipes.filter((r) => !(r.categories || []).length).length], ...allCategories().map(([c, n]) => [c, c, n])].map(([id, label, n]) => (
-              <li key={id} className="row"><button className={`row-main ${cat === id ? 'sel' : ''}`} onClick={() => { setCat(id); setPicking(false) }}><span className="row-text"><b>{label}</b></span><small className="count">{n}</small></button></li>
-            ))}
-          </ul>
-          <button className="btn block" onClick={() => { setPicking(false); push('categories') }}>Manage categories</button>
-        </Sheet>
-      )}
+      {picking && <CategorySheet cat={cat} recipes={recipes} onPick={(c) => { setCat(c); setPicking(false) }} onClose={() => setPicking(false)} onManage={() => { setPicking(false); push('categories') }} />}
     </>
+  )
+}
+
+/** The category list, nested. A parent counts everything filed under it, however deep. */
+function CategorySheet({ cat, recipes, onPick, onClose, onManage }) {
+  const nodes = useMemo(() => categoryTree(allCategories()), [recipes])
+  const [open, setOpen] = useState(() => new Set(ancestors(cat)))
+  const shown = visibleNodes(nodes, open)
+  const toggle = (name) => setOpen((o) => { const n = new Set(o); n.has(name) ? n.delete(name) : n.add(name); return n })
+  const tops = [['all', 'All recipes', recipes.length], ['fav', 'Favorites', recipes.filter((r) => r.favorite).length], ['none', 'Uncategorized', recipes.filter((r) => !(r.categories || []).length).length]]
+  return (
+    <Sheet title="Categories" onClose={onClose} tall>
+      <ul className="list plain">
+        {tops.map(([id, label, n]) => (
+          <li key={id} className="row"><button className={`row-main ${cat === id ? 'sel' : ''}`} onClick={() => onPick(id)}><span className="row-text"><b>{label}</b></span><small className="count">{n}</small></button></li>
+        ))}
+        {shown.map((n) => (
+          <li key={n.name} className="row" style={{ paddingLeft: n.depth * 18 }}>
+            {hasChildren(nodes, n.name)
+              ? <button className="iconbtn twist" aria-label={`${open.has(n.name) ? 'Collapse' : 'Expand'} ${n.label}`} aria-expanded={open.has(n.name)} onClick={() => toggle(n.name)}><Icon name="chevron" size={15} className={`ico turn ${open.has(n.name) ? 'down' : ''}`} /></button>
+              : <span className="twist" />}
+            <button className={`row-main ${cat === n.name ? 'sel' : ''}`} onClick={() => onPick(n.name)}><span className="row-text"><b>{n.label}</b></span><small className="count">{n.count}</small></button>
+          </li>
+        ))}
+      </ul>
+      <button className="btn block" onClick={onManage}>Manage categories</button>
+    </Sheet>
   )
 }

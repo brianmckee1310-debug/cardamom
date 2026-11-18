@@ -243,26 +243,34 @@ details { margin: 12px 0; } summary { color: var(--accent); font-weight: 600; ma
 .roadmap .done .tag { background: var(--accent-soft); color: var(--accent); } .roadmap .next .tag { background: var(--warm); color: var(--warm-ink); }
 
 /* laptop */
-.app.wide { --rail: 208px; --listw: 420px; padding-left: var(--rail); }
-.wide .tabs { top: 0; bottom: 0; right: auto; width: var(--rail); height: auto; flex-direction: column; justify-content: flex-start; gap: 4px; padding: 18px 12px; border-top: 0; border-right: 1px solid var(--line); }
-.wide .tabs .brand { display: flex; align-items: center; gap: 10px; font: 600 21px var(--serif); padding: 0 8px 18px; }
-.wide .tabs button { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; font-size: 15px; padding: 11px 12px; border-radius: 12px; }
-.wide .tabs button.on { background: var(--accent-soft); } .wide .tabs button.on .ico { transform: none; }
-.wide .tabpane { width: var(--listw); border-right: 1px solid var(--line); padding-bottom: 24px; }
-.wide .page { left: calc(var(--rail) + var(--listw) + 1px); }
-.wide .scrim { align-items: center; } .wide .sheet { border-radius: 20px; max-height: 84dvh; } .wide .sheet.tall { height: 84dvh; }
-.wide .toasts, .wide .timers { left: calc(var(--rail) + 16px); right: auto; width: calc(var(--listw) - 32px); bottom: 16px; }
-@media (min-width: 1300px) { .wide .cols { display: grid; grid-template-columns: minmax(280px, 2fr) 3fr; gap: 12px; align-items: start; } }
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; transition-delay: 0s !important; }
-  html { scroll-behavior: auto !important; }
+/* Mobile only, by design: Brian uses this on a phone and nowhere else. On anything wider the
+   phone layout is simply centred in a column rather than stretched, so every screen is laid
+   out at one width and that width is the one that matters. */
+:root { --app: 480px; --side: max(0px, calc(50% - var(--app) / 2)); }
+.app { max-width: var(--app); margin: 0 auto; }
+@media (min-width: 520px) {
+  body { background: color-mix(in srgb, var(--ink) 7%, var(--bg)); }
+  .app { background: var(--bg); box-shadow: 0 0 0 1px var(--line); }
+  .tabs, .page, .scrim, .glance { left: var(--side); right: var(--side); }
+  .toasts, .timers { left: calc(var(--side) + 12px); right: calc(var(--side) + 12px); }
+  .mic { right: calc(var(--side) + 14px); }
+  .mic-said { left: calc(var(--side) + 14px); right: calc(var(--side) + 78px); }
 }
+
 @media print {
-  .tabs, .tabpane, .bar, .actionbar, .toasts, .timers, .pillbtn, .scrim { display: none !important; }
-  .page { position: static; animation: none; } .page-body { overflow: visible; } body, .page { background: #fff; color: #000; }
-  .hero { max-height: 220px; width: 320px; border-radius: 8px; margin: 0 18px; } .app.wide { padding: 0; }
+  .tabs, .bar, .actionbar, .toasts, .timers, .pillbtn, .scrim, .search, .planbar, .lists, .logweek, .drag-h, .group-x, .btn, .iconbtn { display: none !important; }
+  .page { position: static; animation: none; } .page-body { overflow: visible; } body, .page, .app { background: #fff; color: #000; }
+  .hero { max-height: 220px; width: 320px; border-radius: 8px; margin: 0 18px; } .app { max-width: none; box-shadow: none; }
+  /* printing a tab: the list is the point, the chrome is not */
+  .tabpane { display: block !important; overflow: visible !important; }
+  .top { position: static; padding: 0 0 8px; } .top small, .top .ico { display: none; } .top h1 { font-size: 20px; }
+  .list, .day, .card { border-color: #bbb; box-shadow: none; break-inside: avoid; }
+  .row, .meal, .glance-day { break-inside: avoid; }
+  .tick { border-color: #666; } .tick.on { background: #fff; color: #000; }
+  .group-h { color: #000; margin-top: 10px; }
+  .row.done { display: none; } /* a printed list is a list of what to buy */
+  .glance { position: static; padding: 0; } .glance-days { overflow: visible; font-size: 1em !important; }
 }
-.wide .hero { max-height: 300px; }
 
 /* food log ─ the week strip, the day summary, entries, nutrients, notables.
    Every transition here is a width/offset change rather than a transform-heavy flourish, and
@@ -390,3 +398,77 @@ details { margin: 12px 0; } summary { color: var(--accent); font-weight: 600; ma
 .glance-what small { font-size: .68em; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); } .glance-what i { color: var(--muted); font-weight: 400; }
 .glance { font-size: 19px; }
 .seg.slim button { flex: none; overflow: visible; padding: 6px 11px; } .planbar .pillbtn { padding: 6px 10px; font-size: 13px; gap: 5px; }
+
+/* v1.5 ─ drag handles, category tree, log over time */
+.list.drag .row { position: relative; background: var(--surface); }
+.list.drag.plain, .list.drag.bare { background: none; border: 0; }
+.drag-row { touch-action: pan-y; }
+.drag-row.lifted { box-shadow: var(--shadow); border-radius: 12px; background: var(--raised); position: relative; }
+.drag-h { width: 34px; flex: none; align-self: stretch; display: grid; place-items: center; color: var(--muted); touch-action: none; cursor: grab; transition: color .15s var(--out), background .15s var(--out); }
+.drag-h:active { cursor: grabbing; color: var(--accent); background: var(--accent-soft); }
+.drag-h:focus-visible { color: var(--accent); }
+.list.drag .row.meal { border-top: 1px dashed var(--line); } .list.drag.bare .row:first-child { border-top: 0; }
+.twist { width: 30px; flex: none; }
+button.twist { width: 30px; height: 34px; border-radius: 8px; color: var(--muted); display: grid; place-items: center; }
+.seg.wrap { flex-wrap: wrap; } .seg.wrap button { flex: 1 0 28%; }
+
+.spark { display: flex; align-items: flex-end; gap: 3px; height: 92px; }
+.spark.month { gap: 1.5px; }
+.spark-col { flex: 1; min-width: 0; display: flex; align-items: flex-end; height: 100%; }
+.spark-col i { width: 100%; min-height: 2px; border-radius: 3px 3px 0 0; background: var(--accent); transition: height .4s var(--out); }
+.spark-col.over i { background: var(--warm); }
+.sparkwrap { position: relative; margin-bottom: 10px; }
+.spark-goal { position: absolute; left: 0; right: 0; border-top: 1.5px dashed var(--muted); opacity: .55; pointer-events: none; }
+.avgs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.avgs li { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.avgs b { font-family: var(--serif); font-size: 16px; font-variant-numeric: tabular-nums; }
+.avgs small { font-size: 10.5px; color: var(--muted); text-align: center; overflow: hidden; text-overflow: ellipsis; max-width: 100%; white-space: nowrap; }
+
+/* v1.6 ─ the microphone, available anywhere */
+.mic { position: fixed; right: 14px; bottom: calc(var(--tabs) + var(--sab) + 14px); z-index: 9; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); box-shadow: var(--shadow); transition: transform .18s var(--out), background .2s var(--out); }
+.mic:active { transform: scale(.92); }
+.mic.listening { background: var(--warm); color: var(--warm-ink); }
+.mic.working { background: var(--muted); }
+.mic-ring { position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--warm); animation: micpulse 1.5s ease-out infinite; pointer-events: none; }
+@keyframes micpulse { from { transform: scale(.85); opacity: .8 } to { transform: scale(1.25); opacity: 0 } }
+.mic-said { position: fixed; left: 14px; right: 78px; bottom: calc(var(--tabs) + var(--sab) + 22px); z-index: 9; padding: 9px 13px; border-radius: 13px; background: var(--ink); color: var(--bg); font-size: 14px; line-height: 1.35; box-shadow: var(--shadow); animation: rise .2s var(--out) both; }
+.iconbtn.dictate { width: 38px; height: 38px; color: var(--muted); } .iconbtn.dictate.on { color: var(--warm-ink); background: var(--warm); }
+.search.add .dictate { margin-right: -4px; }
+@media print { .mic, .mic-said { display: none !important; } }
+/* room at the end of a scroll so the microphone never sits over the last row */
+.tabpane { padding-bottom: calc(var(--tabs) + var(--sab) + 74px); }
+
+/* v1.7 ─ ingredients and directions as tabs on a phone */
+.recipe-tabs { position: sticky; top: 0; z-index: 4; background: var(--bg); padding: 2px 16px 0; margin-bottom: 2px; scroll-margin-top: 0; }
+.recipe-tabs .seg { margin-bottom: 8px; }
+.extras { animation: tabin .2s var(--out) both; }
+.cols > section[hidden] { display: none; }
+.ingredients:not([hidden]), .directions:not([hidden]) { animation: tabin .2s var(--out) both; }
+@media print { .recipe-tabs { display: none !important; } .cols > section[hidden] { display: block !important; } }
+
+/* v1.8 ─ thumb-sized targets. Everything you tap is at least 44px in its short dimension,
+   which is the smallest a finger hits reliably. Where that would make a control look heavy,
+   the padding grows rather than the ink. */
+.seg button { min-height: 44px; }
+.seg.slim button { min-height: 40px; padding: 8px 14px; }
+.pillbtn { min-height: 42px; padding: 8px 14px; }
+.btn.small { min-height: 40px; padding: 7px 14px; }
+.iconbtn.dictate { width: 44px; height: 44px; }
+.drag-h { width: 42px; }
+.stars button { padding: 11px 8px; display: inline-flex; align-items: center; }
+.stars { margin-left: -8px; }
+.ings li > button { min-height: 44px; padding: 7px 0; }
+.top-title { min-height: 44px; }
+.twist, button.twist { width: 40px; height: 44px; }
+.month-d { min-height: 46px; }
+.logweek-day { min-height: 46px; padding-top: 6px; }
+.row-main { min-height: 56px; }
+.menu button { min-height: 54px; }
+/* The recipe name is already in the bar above, which stays put while you scroll, so the
+   heading on the page can be tighter and give the ingredients the top of the screen. */
+.recipe-head { padding: 10px 18px 0; }
+.recipe-head h1 { font-size: 23px; }
+.recipe-sub { margin: 6px 0 8px; }
+.recipe-head .chips { margin-bottom: 2px; }
+.facts { margin-bottom: 8px; }
+.recipe-tabs { padding-top: 6px; }

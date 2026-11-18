@@ -44,6 +44,8 @@ export default function RecipeView({ id }) {
   const [menu, setMenu] = useState(false)
   const [scaling, setScaling] = useState(false)
   const [gallery, setGallery] = useState(false)
+  const [pane, setPane] = useState('ings')
+  const tabsRef = useRef(null)
   const [busy, setBusy] = useState('')
   const [, force] = useState(0)
   if (!crossed.has(id)) crossed.set(id, new Set())
@@ -61,6 +63,10 @@ export default function RecipeView({ id }) {
   if (!r) return <Page title="Recipe" onBack={app.back}><p className="pad muted">This recipe was deleted.</p></Page>
   const servingsText = base && factor !== 1 ? r.servings.replace(/\d+(?:\.\d+)?/, formatNumber(base * factor, { fractions: false })) : r.servings
   const set = (patch) => saveItem({ ...r, ...patch })
+  // Ingredients and directions as tabs rather than one long scroll: this is a phone app, and
+  // scrolling past the whole ingredient list to reach step one was the thing being fixed.
+  const hasMore = !!(r.notes || r.nutritional_info || whatsIn.length)
+  const swap = (p) => { setPane(p); requestAnimationFrame(() => tabsRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })) }
 
   const nutrition = async () => {
     setMenu(false); setBusy('Analysing nutrition')
@@ -96,7 +102,7 @@ export default function RecipeView({ id }) {
         {hero && <button className="hero" onClick={() => setGallery(true)} aria-label="View photos"><img src={hero} alt="" />{(r.photos || []).length > 1 && <span className="pill">{r.photos.length} photos</span>}</button>}
         <div className="recipe-head">
           <h1>{r.name}</h1>
-          <div className="recipe-sub"><Stars value={r.rating} onChange={(v) => set({ rating: v })} />{r.source && (r.source_url ? <a href={r.source_url} target="_blank" rel="noreferrer">{r.source}</a> : <span>{r.source}</span>)}</div>
+          <div className="recipe-sub"><Stars value={r.rating} onChange={(v) => set({ rating: v })} size={20} />{r.source && (r.source_url ? <a href={r.source_url} target="_blank" rel="noreferrer">{r.source}</a> : <span>{r.source}</span>)}</div>
           <dl className="facts">
             {[['Prep', r.prep_time], ['Cook', r.cook_time], ['Total', r.total_time], ['Serves', servingsText], ['Difficulty', r.difficulty]].filter((x) => x[1]).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
           </dl>
@@ -104,8 +110,17 @@ export default function RecipeView({ id }) {
         </div>
         {busy && <Busy label={busy} />}
         {r.description && <p className="desc">{r.description}</p>}
+        {(
+          <div className="recipe-tabs" ref={tabsRef}>
+            <div className="seg">
+              <button className={pane === 'ings' ? 'on' : ''} onClick={() => swap('ings')}>Ingredients</button>
+              <button className={pane === 'steps' ? 'on' : ''} onClick={() => swap('steps')}>Directions</button>
+              {hasMore && <button className={pane === 'more' ? 'on' : ''} onClick={() => swap('more')}>More</button>}
+            </div>
+          </div>
+        )}
         <div className="cols">
-          <section className="ingredients">
+          <section className="ingredients" hidden={pane !== 'ings'}>
             <div className="sec-head"><h2>Ingredients</h2><button className={`pillbtn ${factor !== 1 || system !== 'original' ? 'on' : ''}`} onClick={() => setScaling(true)}><Icon name="scale" size={15} />{factor !== 1 ? `${formatNumber(factor)}×` : 'Scale'}{system !== 'original' ? ` · ${system === 'metric' ? 'Metric' : 'US'}` : ''}</button></div>
             <ul className="ings">
               {ings.map((l, i) => isHeader(l) ? <li key={i} className="ing-head">{l.replace(/^#+\s*|\*\*/g, '')}</li> : (
@@ -114,7 +129,7 @@ export default function RecipeView({ id }) {
               {!ings.length && <li className="muted">No ingredients listed.</li>}
             </ul>
           </section>
-          <section className="directions">
+          <section className="directions" hidden={pane !== 'steps'}>
             <div className="sec-head"><h2>Directions</h2></div>
             <ol className="steps">
               {steps.map((s, i) => isHeader(s) ? <li key={i} className="ing-head">{s}</li> : (
@@ -122,16 +137,20 @@ export default function RecipeView({ id }) {
               ))}
               {!steps.length && <li className="muted">No directions listed.</li>}
             </ol>
-            {r.notes && <><div className="sec-head"><h2>Notes</h2></div><p className="notes">{r.notes}</p></>}
-            {r.nutritional_info && <><div className="sec-head"><h2>Nutrition</h2></div><p className="notes nutrition">{r.nutritional_info}</p></>}
-            {whatsIn.length > 0 && (
-              <>
-                <div className="sec-head"><h2>What&rsquo;s in it</h2></div>
-                <div className="notable-list">{whatsIn.map((n) => <NotableCard key={n.id || n.label} n={n} />)}</div>
-                <p className="muted small nudge">Interesting rather than prescriptive, and not medical advice.</p>
-              </>
-            )}
           </section>
+          {hasMore && (
+            <section className="extras" hidden={pane !== 'more'}>
+              {r.notes && <><div className="sec-head"><h2>Notes</h2></div><p className="notes">{r.notes}</p></>}
+              {r.nutritional_info && <><div className="sec-head"><h2>Nutrition</h2></div><p className="notes nutrition">{r.nutritional_info}</p></>}
+              {whatsIn.length > 0 && (
+                <>
+                  <div className="sec-head"><h2>What&rsquo;s in it</h2></div>
+                  <div className="notable-list">{whatsIn.map((n) => <NotableCard key={n.id || n.label} n={n} />)}</div>
+                  <p className="muted small nudge">Interesting rather than prescriptive, and not medical advice.</p>
+                </>
+              )}
+            </section>
+          )}
         </div>
       </article>
       {scaling && (

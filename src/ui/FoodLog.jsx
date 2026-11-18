@@ -181,6 +181,7 @@ export default function FoodLog() {
       {menu && (
         <Sheet title={longDate(date)} onClose={() => setMenu(false)}>
           <div className="menu">
+            <button onClick={() => { setMenu(false); app.push('logRange', { date }) }}><Icon name="chart" />Week and month view</button>
             <button onClick={() => { setMenu(false); app.push('logTargets', {}) }}><Icon name="gear" />Daily targets</button>
             <button disabled={!entriesOn(addDays(date, -1), who).length} onClick={async () => { setMenu(false); const y = entriesOn(addDays(date, -1), who); await saveItems(copyDay(y, date, who)); app.toast(`${y.length} copied from yesterday`) }}><Icon name="paste" />Copy yesterday onto this day</button>
             <button onClick={() => { setMenu(false); app.push('logAdd', { date, meal: guessMeal() }) }}><Icon name="plus" />Log something else</button>

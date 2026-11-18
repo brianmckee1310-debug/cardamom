@@ -5,7 +5,10 @@ import { ROADMAP, VERSION } from '../roadmap.js'
 import { sb, sbConfig, BUILT_IN, session, signIn, signUp, signOut, createHousehold, joinHousehold, findHousehold, syncNow, syncStatus, onSyncStatus, functionsUrl } from '../lib/sync.js'
 import { DEFAULT_MODEL, recipeFromText } from '../lib/gemini.js'
 import { writePaprikaFile } from '../lib/paprika.js'
-import { buildIcs } from '../lib/ics.js'
+import { buildIcs, mealTypeList, MEAL_TYPES } from '../lib/ics.js'
+import { aisleList, AISLE_ORDER, fallbackAisle } from '../lib/ingredients.js'
+import DragList from './DragList.jsx'
+import { categoryTree, visibleNodes, hasChildren, renameMap, applyRename, normalizeCat, isUnder } from '../lib/categories.js'
 import { download } from './RecipeView.jsx'
 
 export function useSync() { const [s, setS] = useState(syncStatus()); useEffect(() => onSyncStatus(setS), []); return s }
@@ -45,6 +48,8 @@ export default function More() {
           <Row icon="users" title="Household and sync" sub={syncSub} onClick={() => app.push('household')} />
           <Row icon="filter" title="Categories" sub={`${allCategories().length} categories`} onClick={() => app.push('categories')} />
           <Row icon="trash" title="Recently deleted" sub="Restore a recipe" onClick={() => app.push('trash')} />
+          <Row icon="grid" title="Aisles" sub={`${aisleList(s).length} sections, in shop order`} onClick={() => app.push('aisles')} />
+          <Row icon="calendar" title="Meal types" sub={mealTypeList(s).join(', ')} onClick={() => app.push('mealTypes')} />
         </ul>
         <h3 className="group-h">Your recipes</h3>
         <ul className="list">
@@ -147,33 +152,47 @@ export function Categories() {
   const app = useApp()
   const s = useSettings()
   useKind('recipe')
-  const cats = allCategories()
+  const nodes = categoryTree(allCategories())
   const [editing, setEditing] = useState(null)
   const [name, setName] = useState('')
   const [fresh, setFresh] = useState('')
+  const [open, setOpen] = useState(() => new Set())
+  const shown = visibleNodes(nodes, open)
+  const toggle = (n) => setOpen((o) => { const x = new Set(o); x.has(n) ? x.delete(n) : x.add(n); return x })
+
+  /** Renaming a branch takes its children with it: "Dinner" -> "Supper" moves "Dinner > Pasta" too. */
   const rename = async (from, to) => {
-    to = to.trim(); setEditing(null)
-    if (!to || to === from) return
-    const hit = listKind('recipe').filter((r) => (r.categories || []).includes(from))
-    await saveItems(hit.map((r) => ({ ...r, categories: [...new Set(r.categories.map((c) => (c === from ? to : c)))].sort((a, b) => a.localeCompare(b)) })))
-    await setSetting('extraCategories', (s.extraCategories || []).map((c) => (c === from ? to : c)))
-    app.toast(`Renamed to ${to}`)
+    setEditing(null)
+    const map = renameMap([...nodes.map((n) => n.name), ...(s.extraCategories || [])], from, to)
+    if (!map.size) { if (normalizeCat(to) && normalizeCat(to) !== normalizeCat(from)) app.toast('A category cannot be moved inside itself'); return }
+    const hit = listKind('recipe').filter((r) => (r.categories || []).some((c) => map.has(normalizeCat(c))))
+    await saveItems(hit.map((r) => ({ ...r, categories: applyRename(r.categories, map) })))
+    await setSetting('extraCategories', (s.extraCategories || []).map((c) => map.get(normalizeCat(c)) || c))
+    app.toast(`Renamed${hit.length ? ` on ${hit.length} recipe${hit.length === 1 ? '' : 's'}` : ''}`)
   }
   const remove = async (c) => {
-    const hit = listKind('recipe').filter((r) => (r.categories || []).includes(c))
+    const under = nodes.filter((n) => isUnder(n.name, c)).map((n) => n.name)
+    const hit = listKind('recipe').filter((r) => (r.categories || []).some((x) => under.includes(normalizeCat(x))))
     const extras = s.extraCategories || []
-    await saveItems(hit.map((r) => ({ ...r, categories: r.categories.filter((x) => x !== c) })))
-    await setSetting('extraCategories', extras.filter((x) => x !== c))
-    app.toast(`Removed ${c} from ${hit.length} recipes`, { undo: async () => { await saveItems(hit); await setSetting('extraCategories', extras) } })
+    await saveItems(hit.map((r) => ({ ...r, categories: (r.categories || []).filter((x) => !under.includes(normalizeCat(x))) })))
+    await setSetting('extraCategories', extras.filter((x) => !under.includes(normalizeCat(x))))
+    app.toast(`Removed from ${hit.length} recipe${hit.length === 1 ? '' : 's'}`, { undo: async () => { await saveItems(hit); await setSetting('extraCategories', extras) } })
   }
   return (
     <Page title="Categories" onBack={app.back}>
-      <form className="search add" onSubmit={async (e) => { e.preventDefault(); if (fresh.trim()) { await setSetting('extraCategories', [...new Set([...(s.extraCategories || []), fresh.trim()])]); setFresh('') } }}><Icon name="plus" size={18} /><input value={fresh} onChange={(e) => setFresh(e.target.value)} placeholder="New category" aria-label="New category" />{fresh.trim() && <button className="btn small primary">Add</button>}</form>
+      <p className="hint">Use <b>Parent &gt; Child</b> to nest one inside another — rename a category to <i>Dinner &gt; Pasta</i> and it moves under Dinner. Choosing a parent shows everything beneath it.</p>
+      <form className="search add" onSubmit={async (e) => { e.preventDefault(); const v = normalizeCat(fresh); if (v) { await setSetting('extraCategories', [...new Set([...(s.extraCategories || []), v])]); setFresh('') } }}><Icon name="plus" size={18} /><input value={fresh} onChange={(e) => setFresh(e.target.value)} placeholder="New category, or Parent > Child" aria-label="New category" />{fresh.trim() && <button className="btn small primary">Add</button>}</form>
       <ul className="list">
-        {cats.map(([c, n]) => editing === c ? (
-          <li key={c} className="row"><form className="rowline pad" onSubmit={(e) => { e.preventDefault(); rename(c, name) }}><input value={name} onChange={(e) => setName(e.target.value)} autoFocus aria-label="Category name" /><button className="btn primary small">Save</button><button type="button" className="btn small" onClick={() => setEditing(null)}>Cancel</button></form></li>
+        {shown.map((n) => editing === n.name ? (
+          <li key={n.name} className="row"><form className="rowline pad" onSubmit={(e) => { e.preventDefault(); rename(n.name, name) }}><input value={name} onChange={(e) => setName(e.target.value)} autoFocus aria-label="Category name" /><button className="btn primary small">Save</button><button type="button" className="btn small" onClick={() => setEditing(null)}>Cancel</button></form></li>
         ) : (
-          <li key={c} className="row"><button className="row-main" onClick={() => { setEditing(c); setName(c) }}><span className="row-text"><b>{c}</b><small>{n} recipes</small></span></button><button className="iconbtn" aria-label={`Delete ${c}`} onClick={() => remove(c)}><Icon name="trash" /></button></li>
+          <li key={n.name} className="row" style={{ paddingLeft: n.depth * 18 }}>
+            {hasChildren(nodes, n.name)
+              ? <button className="iconbtn twist" aria-label={`${open.has(n.name) ? 'Collapse' : 'Expand'} ${n.label}`} aria-expanded={open.has(n.name)} onClick={() => toggle(n.name)}><Icon name="chevron" size={15} className={`ico turn ${open.has(n.name) ? 'down' : ''}`} /></button>
+              : <span className="twist" />}
+            <button className="row-main" onClick={() => { setEditing(n.name); setName(n.name) }}><span className="row-text"><b>{n.label}</b><small>{n.count} recipe{n.count === 1 ? '' : 's'}{hasChildren(nodes, n.name) ? ', including below' : ''}</small></span></button>
+            <button className="iconbtn" aria-label={`Delete ${n.label}`} onClick={() => remove(n.name)}><Icon name="trash" /></button>
+          </li>
         ))}
       </ul>
     </Page>
@@ -201,4 +220,72 @@ export function Trash() {
       )}
     </Page>
   )
+}
+
+/**
+ * A reorderable, renameable list kept in settings. Used for grocery aisles and meal types,
+ * which behave the same way: drag to order, tap to rename, and renaming has to carry the
+ * items that already refer to the old name.
+ */
+function EditableList({ title, intro, settingKey, fallback, addLabel, onRename, onRemove, removeWarning }) {
+  const app = useApp()
+  const s = useSettings()
+  const list = s[settingKey]?.length ? s[settingKey] : fallback
+  const [editing, setEditing] = useState(null)
+  const [name, setName] = useState('')
+  const [fresh, setFresh] = useState('')
+  const save = async (next) => setSetting(settingKey, next)
+  const rename = async (from, to) => {
+    to = to.trim(); setEditing(null)
+    if (!to || to === from || list.includes(to)) return
+    await save(list.map((x) => (x === from ? to : x)))
+    const n = await onRename(from, to)
+    app.toast(n ? `Renamed, and ${n} item${n === 1 ? '' : 's'} moved with it` : `Renamed to ${to}`)
+  }
+  const remove = async (x) => {
+    if (list.length < 2) return
+    const next = list.filter((y) => y !== x)
+    await save(next)
+    const n = await onRemove(x, next)
+    app.toast(n ? `${x} removed, ${n} item${n === 1 ? '' : 's'} moved` : `${x} removed`)
+  }
+  return (
+    <Page title={title} onBack={app.back}>
+      <p className="hint">{intro}</p>
+      <form className="search add" onSubmit={async (e) => { e.preventDefault(); const v = fresh.trim(); if (v && !list.includes(v)) { await save([...list, v]); setFresh('') } }}>
+        <Icon name="plus" size={18} /><input value={fresh} onChange={(e) => setFresh(e.target.value)} placeholder={addLabel} aria-label={addLabel} />{fresh.trim() && <button className="btn small primary">Add</button>}
+      </form>
+      <DragList items={list} keyOf={(x) => x} labelOf={(x) => x} onReorder={save} renderItem={(x) => (
+        editing === x
+          ? <form className="rowline pad" onSubmit={(e) => { e.preventDefault(); rename(x, name) }}><input value={name} onChange={(e) => setName(e.target.value)} autoFocus aria-label="Name" /><button className="btn primary small">Save</button><button type="button" className="btn small" onClick={() => setEditing(null)}>Cancel</button></form>
+          : <><button className="row-main" onClick={() => { setEditing(x); setName(x) }}><span className="row-text"><b>{x}</b></span></button>{list.length > 1 && <button className="iconbtn" aria-label={`Remove ${x}`} onClick={() => remove(x)}><Icon name="trash" /></button>}</>
+      )} />
+      <p className="muted small pad">{removeWarning}</p>
+      {s[settingKey]?.length > 0 && <button className="btn block" onClick={() => save(null)}>Back to the built-in list</button>}
+    </Page>
+  )
+}
+
+export function Aisles() {
+  const move = async (from, to) => {
+    const hit = [...listKind('grocery'), ...listKind('pantry')].filter((i) => (i.aisle || 'Other') === from)
+    if (hit.length) await saveItems(hit.map((i) => ({ ...i, aisle: to })))
+    return hit.length
+  }
+  return <EditableList title="Aisles" settingKey="aisles" fallback={AISLE_ORDER} addLabel="New aisle"
+    intro="The order here is the order your grocery list is grouped in, so put them in the order you walk the shop."
+    onRename={move} onRemove={(x, next) => move(x, fallbackAisle(next))}
+    removeWarning="Removing an aisle moves anything in it to the last aisle on the list. Nothing is deleted." />
+}
+
+export function MealTypes() {
+  const move = async (from, to) => {
+    const hit = listKind('meal').filter((m) => m.type === from)
+    if (hit.length) await saveItems(hit.map((m) => ({ ...m, type: to })))
+    return hit.length
+  }
+  return <EditableList title="Meal types" settingKey="mealTypes" fallback={MEAL_TYPES} addLabel="New meal type"
+    intro="These are the slots on each day of the planner, shown in this order."
+    onRename={move} onRemove={(x, next) => move(x, next[next.length - 1])}
+    removeWarning="Removing a meal type moves anything planned under it to the last type on the list." />
 }

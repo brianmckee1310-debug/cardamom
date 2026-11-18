@@ -20,15 +20,8 @@ export default function CookMode({ id, factor = 1, system = 'original' }) {
   const rec = useRef(null), speaking = useRef(false), live = useRef({})
   live.current = { i, steps, ings, voice }
 
-  // keep the screen on while cooking
-  useEffect(() => {
-    let lock = null, on = true
-    const get = async () => { try { lock = await navigator.wakeLock?.request('screen') } catch { /* not allowed */ } }
-    get()
-    const vis = () => document.visibilityState === 'visible' && on && get()
-    document.addEventListener('visibilitychange', vis)
-    return () => { on = false; document.removeEventListener('visibilitychange', vis); lock?.release?.().catch(() => {}); speechSynthesis?.cancel() }
-  }, [])
+  // The screen is kept awake app-wide now; this only has to stop talking on the way out.
+  useEffect(() => () => { speechSynthesis?.cancel() }, [])
 
   const listen = useCallback(() => { if (!live.current.voice || speaking.current || !rec.current) return; try { rec.current.start() } catch { /* already running */ } }, [])
   const say = useCallback((text) => {

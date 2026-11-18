@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { saveItem } from '../store.js'
+import { saveItem, getSettings } from '../store.js'
 import { useApp, Sheet, Icon, Field, Busy } from './bits.jsx'
 import { lookupBarcode } from '../lib/importers.js'
-import { guessAisle } from '../lib/ingredients.js'
+import { guessAisle, aisleList } from '../lib/ingredients.js'
 
 import { hasNut } from '../lib/nutrition.js'
 import { matchNotables } from '../lib/notables.js'
@@ -68,7 +68,7 @@ export default function Barcode({ target: t0 = 'grocery', date, meal }) {
       app.replace('logAdd', { date: date || today(), meal: meal || guessMeal(), draft })
       return
     }
-    await saveItem(target === 'pantry' ? { kind: 'pantry', name: name.trim(), qty: '', aisle: guessAisle(name), inStock: true, barcode: code } : { kind: 'grocery', name: name.trim(), qty: '', aisle: guessAisle(name), done: false, barcode: code })
+    await saveItem(target === 'pantry' ? { kind: 'pantry', name: name.trim(), qty: '', aisle: guessAisle(name, aisleList(getSettings())), inStock: true, barcode: code } : { kind: 'grocery', name: name.trim(), qty: '', aisle: guessAisle(name, aisleList(getSettings())), done: false, barcode: code })
     app.toast(`${name.trim()} added to ${target === 'pantry' ? 'pantry' : 'groceries'}`)
     setName(''); setCode(''); setState('scan'); setTimeout(() => { last.current = '' }, 2500)
   }
