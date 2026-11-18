@@ -472,3 +472,18 @@ button.twist { width: 30px; height: 34px; border-radius: 8px; color: var(--muted
 .recipe-head .chips { margin-bottom: 2px; }
 .facts { margin-bottom: 8px; }
 .recipe-tabs { padding-top: 6px; }
+
+/* --- Add by voice: token list ---------------------------------------------------------- */
+.list.tokens .token-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.list.tokens .token-row .row-text { flex: 1 1 auto; min-width: 0; }
+.list.tokens .token-row .rowline { flex: 0 0 auto; margin: 0; }
+/* A token is only shown in full once; a quiet flash marks the one just made so it is easy
+   to find in a list of five, without a banner shouting about it. */
+@keyframes token-arrive {
+  from { background: color-mix(in oklab, var(--accent) 22%, transparent); }
+  to   { background: transparent; }
+}
+.list.tokens .token-row.just-made { animation: token-arrive 1.6s ease-out both; border-radius: 10px; }
+@media (prefers-reduced-motion: reduce) { .list.tokens .token-row.just-made { animation: none; } }
+.card.prose p { margin: 0 0 10px; line-height: 1.5; }
+.card.prose p:last-child { margin-bottom: 0; }

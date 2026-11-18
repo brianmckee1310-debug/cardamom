@@ -63,6 +63,20 @@ export function matchList(name, lists) {
   return hit ? { id: hit.id } : { unknown: n }
 }
 
+// Dictation writes small numbers as words ("two pounds of carrots"), but the quantity parser
+// only reads digits, so the whole phrase would become the item's name. Convert a leading
+// number word, but only when a unit or "of" follows it — otherwise "four cheese pizza" would
+// lose its four, and a product name is worth more than a quantity we were not sure about.
+const NUMWORD = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50 }
+const UNITISH = /^(pounds?|lbs?|ounces?|oz|cups?|quarts?|qts?|pints?|pts?|gallons?|gal|grams?|g|kilos?|kilograms?|kgs?|liters?|litres?|l|ml|cans?|jars?|bags?|boxe?s?|bottles?|bunch(?:es)?|heads?|cloves?|sticks?|packs?|packages?|pkgs?|slices?|dozens?|loa(?:f|ves)|of)\b/i
+export function spokenNumbers(text) {
+  const t = String(text || '').trim()
+  const m = t.match(/^([a-z]+)\s+(.+)$/i)
+  if (!m) return t
+  const n = NUMWORD[m[1].toLowerCase()]
+  return n != null && UNITISH.test(m[2]) ? `${n} ${m[2]}` : t
+}
+
 const ADD = /^(?:add|put|get)\s+(.+?)(?:\s+(?:to|on|onto|in)\s+(?:the\s+|my\s+|our\s+)?(.+?))?$/
 const LOG = /^(?:log|i (?:ate|had)|record)\s+(.+)$/
 const COOK = /^(?:cook|start cooking|let'?s cook|cook mode|make)\s+(.+)$/
@@ -101,7 +115,9 @@ export function parseCommand(said, { lists = [], recipes = [] } = {}) {
 
   m = raw.match(new RegExp(ADD, 'i'))
   if (m) {
-    const item = m[1].trim()
+    // "add a hammer" is a hammer: the article is not part of what you are buying, and
+    // leaving it on would stop it combining with the hammer already on the list.
+    const item = m[1].trim().replace(/^(?:an?|some)\s+(?=\S)/i, '').trim() || m[1].trim()
     const list = matchList(m[2] || '', lists)
     if (list.unknown) return { kind: 'unclear', why: `I do not have a list called ${list.unknown}.` }
     return { kind: 'add', item, list: list.id }

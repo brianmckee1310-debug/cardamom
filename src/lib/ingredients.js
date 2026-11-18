@@ -136,7 +136,7 @@ export function parseServings(s) {
 
 const AISLES = [
   ['Produce', /\b(apple|avocado|banana|basil|bell pepper|berr(y|ies)|broccoli|cabbage|carrot|cauliflower|celery|chard|chive|cilantro|corn on|cucumber|dill|eggplant|garlic|ginger|grape|green onion|greens|herb|jalape|kale|leek|lemon|lettuce|lime|mango|mint|mushroom|onion|orange|parsley|peach|pear|pepper|pineapple|potato|radish|rosemary|scallion|shallot|spinach|squash|strawberr|thyme|tomato(?!.*(paste|sauce|canned|can ))|zucchini|arugula|asparagus|beet|sprout|fennel|sage)/i],
-  ['Meat & Seafood', /\b(bacon|beef|brisket|chicken|chorizo|chuck|cod|crab|duck|fish|ham|lamb|meatball|pancetta|pork|prosciutto|ribs?|salmon|sausage|scallop|shrimp|steak|tilapia|tuna steak|turkey|kielbasa|halibut|mussel|clam)/i],
+  ['Meat & Seafood', /\b(bacon|beef|brisket|chicken|chorizo|chuck|cod|crab|duck|fish|hams?(?![a-z])|lamb|meatball|pancetta|pork|prosciutto|ribs?|salmon|sausage|scallop|shrimp|steak|tilapia|tuna steak|turkey|kielbasa|halibut|mussel|clam)/i],
   ['Dairy & Eggs', /\b(butter(?!nut)|buttermilk|cheddar|cheese|cream|egg|feta|ghee|half[- ]and[- ]half|milk(?!.*coconut)|mozzarella|parmesan|ricotta|sour cream|yogurt|yoghurt|mascarpone|gruyere|provolone)/i],
   ['Bakery', /\b(bagel|baguette|bread|bun|ciabatta|naan|pita|roll|tortilla|croissant|english muffin)/i],
   ['Frozen', /\b(frozen|ice cream|puff pastry)/i],

@@ -61,6 +61,10 @@ export default function More() {
           <Row icon="calendar" title="Download calendar file" sub="Add your meal plan to any calendar app" onClick={() => meals.length ? download('cardamom-meals.ics', buildIcs(meals), 'text/calendar') : app.toast('Plan a meal first')} />
           <Row icon="link" title="Copy live calendar link" sub={feed ? 'Subscribe once and it stays current' : 'Available once household sync is on'} onClick={async () => { if (!feed) return app.toast('Turn on household sync first'); await navigator.clipboard.writeText(feed); app.toast('Link copied. In Google Calendar: Other calendars, From URL.') }} />
         </ul>
+        <h3 className="group-h">Hands free</h3>
+        <ul className="list">
+          <Row icon="mic" title="Add by voice" sub={s.household ? 'Siri and other shortcuts, without opening the app' : 'Available once household sync is on'} onClick={() => s.household ? app.push('voiceAdding') : app.toast('Turn on household sync first')} />
+        </ul>
         <h3 className="group-h">AI helper</h3>
         <div className="card">
           <Field label="Gemini key" hint="Free from aistudio.google.com (Get API key). Stored on this device only, so paste it on each phone."><input value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste key" autoComplete="off" spellCheck={false} /></Field>
@@ -143,6 +147,100 @@ export function Household() {
             <button className="btn" onClick={run('Signing out', signOut)}>Sign out</button>
           </>
         )}
+      </div>
+    </Page>
+  )
+}
+
+/**
+ * Per-device tokens for the voice endpoint. One per phone rather than one per household, so a
+ * lost phone costs you one revoke instead of re-pasting a new secret everywhere.
+ */
+export function VoiceAdding() {
+  const app = useApp()
+  const s = useSettings()
+  const [rows, setRows] = useState(null)
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState('')
+  const [fresh, setFresh] = useState('')
+
+  const load = async () => {
+    const c = sb()
+    if (!c || !s.household) return setRows([])
+    const { data, error } = await c.from('cardamom_tokens').select('token, label, created_at, last_used_at').eq('household_id', s.household.id).order('created_at')
+    if (error) { app.toast(plainly(error.message)); return setRows([]) }
+    setRows(data || [])
+  }
+  useEffect(() => { load() }, [s.household?.id])
+
+  const urlFor = (t) => `${functionsUrl('cardamom-add')}?token=${t}&text=`
+
+  const create = async (e) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    setBusy('Making a token')
+    const { data, error } = await sb().from('cardamom_tokens').insert({ household_id: s.household.id, label: name.trim() }).select('token, label, created_at, last_used_at').single()
+    setBusy('')
+    if (error) return app.toast(plainly(error.message))
+    setName(''); setFresh(data.token); setRows((r) => [...(r || []), data])
+    try { await navigator.clipboard.writeText(urlFor(data.token)); app.toast('Token made, and the link is copied') } catch { app.toast('Token made') }
+  }
+
+  const revoke = async (t) => {
+    setBusy('Revoking')
+    const { error } = await sb().from('cardamom_tokens').delete().eq('token', t.token)
+    setBusy('')
+    if (error) return app.toast(plainly(error.message))
+    setRows((r) => r.filter((x) => x.token !== t.token))
+    app.toast(`${t.label} can no longer add to your lists`)
+  }
+
+  const when = (iso) => {
+    if (!iso) return 'never used'
+    const mins = Math.round((Date.now() - new Date(iso)) / 60000)
+    if (mins < 1) return 'used just now'
+    if (mins < 60) return `used ${mins} minute${mins > 1 ? 's' : ''} ago`
+    const hrs = Math.round(mins / 60)
+    if (hrs < 24) return `used ${hrs} hour${hrs > 1 ? 's' : ''} ago`
+    return `used ${new Date(iso).toLocaleDateString()}`
+  }
+
+  return (
+    <Page title="Add by voice" onBack={app.back}>
+      {busy && <Busy label={busy} />}
+      <p className="lead">Say an item without opening the app. Each phone gets its own link; revoking one leaves the others working.</p>
+      <div className="card">
+        <form onSubmit={create}>
+          <Field label="New token" hint="Name it after the phone it is going on, so you know which one to revoke later."><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Brian's phone" /></Field>
+          <button className="btn primary block" disabled={!name.trim()}>Make a token and copy the link</button>
+        </form>
+      </div>
+
+      {rows === null ? <Busy label="Loading" /> : !rows.length ? (
+        <Empty icon="mic" title="No tokens yet">Make one above, then paste the link into a Shortcut.</Empty>
+      ) : (
+        <ul className="list tokens">
+          {rows.map((t) => (
+            <li key={t.token} className={`row token-row ${fresh === t.token ? 'just-made' : ''}`}>
+              <div className="row-text">
+                <b>{t.label}</b>
+                <small>{when(t.last_used_at)}</small>
+              </div>
+              <div className="rowline">
+                <button className="btn small" onClick={async () => { await navigator.clipboard.writeText(urlFor(t.token)); app.toast('Link copied') }}>Copy link</button>
+                <button className="btn small danger" onClick={() => revoke(t)}>Revoke</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h3 className="group-h">Setting it up</h3>
+      <div className="card prose">
+        <p><b>iPhone.</b> Shortcuts app, new shortcut, two actions: <i>Dictate Text</i>, then <i>Get Contents of URL</i>. Paste the copied link into the URL and drop the Dictated Text onto the end of it. Name it &ldquo;Add to Cardamom&rdquo;. Then say &ldquo;Hey Siri, add to Cardamom&rdquo;.</p>
+        <p><b>Android.</b> Anything that can open a web address works &mdash; a home screen shortcut, Samsung&rsquo;s Modes and Routines, HTTP Shortcuts, Tasker. Hands-free on Android is still being worked out; see the roadmap.</p>
+        <p><b>What it understands.</b> &ldquo;Eggs&rdquo; on its own, or &ldquo;add two pounds of carrots&rdquo;, or &ldquo;add nails to the hardware store&rdquo;. No list named means the grocery list. It combines with anything already on that list rather than adding a second line.</p>
+        <p className="muted small">Anyone holding the link can add to your lists, so treat it like a key. It cannot read your recipes or change anything else.</p>
       </div>
     </Page>
   )

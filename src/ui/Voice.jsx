@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useKind, listKind, saveItems, getSettings } from '../store.js'
 import { useApp, Icon, fmtDate, today } from './bits.jsx'
-import { parseCommand, confirmText, matchNamed } from '../lib/voice.js'
+import { parseCommand, confirmText, matchNamed, spokenNumbers } from '../lib/voice.js'
 import { mergeIntoList, quickItem } from '../lib/grocery.js'
 import { aisleList } from '../lib/ingredients.js'
 import { myWho, guessMeal } from '../lib/log.js'
@@ -40,7 +40,7 @@ export async function runCommand(said, app) {
     case 'cook': app.push('cook', { id: cmd.id }); return { ok: true, text: confirmText(cmd) }
     case 'add': {
       const settings = getSettings()
-      const inc = { ...quickItem(cmd.item, 'grocery', aisleList(settings)), done: false, list: cmd.list || undefined }
+      const inc = { ...quickItem(spokenNumbers(cmd.item), 'grocery', aisleList(settings)), done: false, list: cmd.list || undefined }
       const existing = listKind('grocery').filter((e) => (e.list || '') === (cmd.list || ''))
       const out = mergeIntoList(existing, [inc])
       await saveItems(out)

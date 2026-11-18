@@ -1,6 +1,6 @@
 # Cardamom roadmap
 
-Personal Paprika-style recipe manager for Brian and his wife. Updated 2026-11-17, version 1.8.0.
+Personal Paprika-style recipe manager for Brian and his wife. Updated 2026-11-18, version 1.9.0.
 
 Live at https://brianmckee1310-debug.github.io/cardamom/
 Code at https://github.com/brianmckee1310-debug/cardamom (Pages serves `main` / `/docs`)
@@ -19,7 +19,8 @@ Source on disk at `C:\Users\brian\Claude\Projects\Cardamom`
 | 9 | Hands-free | Done | |
 | 10 | Less scrolling: a recipe in tabs | Done | |
 | 11 | Mobile only | Done | |
-| 12 | Add to a list by voice | Next | Opus 5, medium effort |
+| 12 | Add to a list by voice | Done (Android trigger still open) | |
+| 13 | Hands-free on Android | Next | Opus 5, low effort — mostly testing on the phone |
 
 ## Phase 11, done on 2026-11-17 — version 1.8.0
 
@@ -253,49 +254,61 @@ what "it took a while" feels like. First load is also half what it was.
   field already said "servings".
 - The sticky action button at the foot of a sheet did not hide what scrolled under it.
 
-## Phase 12 — add to a list by voice. Next. Opus 5, medium effort.
+## Phase 12, done on 2026-11-18 — version 1.9.0
 
-Brian's goal, in his words: hands full, moving around, screen off — "hey, add eggs to the
-grocery list". He has Android (Galaxy S23 Ultra), his wife has iPhone. He does not care
-whether it goes through Gemini; he cares that it works without touching the phone.
+Adding to a shopping list without opening the app.
 
-### What the research settled, 2026-11-17
-The direct route is closed and will not reopen. Google removed Assistant triggers that take
-variable input on 2022-08-31, and removed conversational actions entirely, which is the
-machinery IFTTT and friends were built on. The Tasker workaround that survived that is now
-broken too: since Assistant was replaced by Gemini, binding a custom "hey Google" phrase to
-a third-party action does not reliably work by any method. So there is no supported Google
-path for a spoken phrase with a variable reaching a custom endpoint. Do not spend time
-looking for one again.
+- **A token-authenticated endpoint**, `cardamom-add`, alongside the two already deployed. It
+  takes a sentence and writes straight to the household's lists. `verify_jwt` is off because a
+  Shortcut cannot hold a login; the token is the whole of the authentication.
+- **It speaks the app's own language.** "eggs" on its own, "add two pounds of carrots", "add
+  nails to the hardware store". No list named means the grocery list. It combines with what is
+  already on that list rather than adding a second line. The grammar is not reimplemented
+  server-side: `supabase/functions/cardamom-add/lib/` holds copies of `src/lib/voice.js`,
+  `grocery.js` and `ingredients.js`, and a unit test fails if the copies drift. **Change
+  anything in `src/lib` and you must copy all three across and redeploy the whole function.**
+- **Per-device tokens**, made and revoked under More → Add by voice. Named after the phone they
+  go on, showing when each was last used. Revoking is a delete, so gone is gone, and one phone's
+  token can go without disturbing the other's.
+- **Two bugs found by testing the real endpoint.** Dictation writes small numbers as words, so
+  "two pounds of carrots" became the item's *name* rather than a quantity and a thing; a leading
+  number word is now converted, but only when a unit or "of" follows it, so "four cheese pizza"
+  keeps its four. And "a hammer" landed in Meat & Seafood, because the aisle guesser matched
+  "ham" inside "hammer" — that one affected typed entry too, not just voice.
 
-### The build, in order
-1. **The endpoint.** A Supabase edge function alongside the two already deployed. Takes an
-   item and an optional list name, writes straight to the household's data. This is most of
-   the work and everything else depends on it.
-2. **Token.** Per-device, revocable from More. Each phone gets its own secret, so losing one
-   phone does not mean re-pasting on the other. Decided by Claude; Brian left it open.
-3. **iPhone (certain to work).** Shortcut: *Dictate Text* then *Get Contents of URL*, named
-   "Add to Cardamom". "Hey Siri, add to Cardamom" with the screen off.
-4. **Android (experiment, do this before promising anything).** Test whether a Bixby quick
-   command passes dictated text through to a web request. "Hi Bixby" wakes screen-off on the
-   S23 Ultra, and quick commands take a trigger phrase, but whether the spoken *item* reaches
-   the request is unconfirmed and documentation does not say. Twenty minutes on the real
-   phone answers it.
-5. **Android fallback, if Bixby will not pass text.** Bridge through a list app Google
-   natively supports: Brian says the normal Google phrase, Google writes to its own list,
-   Cardamom pulls it in on a timer. Supported and durable, so it will not break on the next
-   Gemini update, but it needs a Google sign-in and is not instant. Tasker with AutoVoice and
-   its own hotword is the other option — fully flexible, but a different wake word and it
-   listens continuously.
+### Checked
+12 requests against the deployed function: bare item, spoken quantity, duplicate combining,
+named list, partial list name, unknown list, explicit `?list=`, product name kept intact, bad
+token, empty text, a non-add sentence, and a JSON POST. All behaved. Rows verified in the
+database afterwards — right list, right quantity, right aisle. 111 unit tests pass, including
+the drift guard on the three copied libraries.
 
-### Lists
-Default to the weekly grocery list when no list is named. Brian's current Paprika lists:
-weekly grocery, hardware store, home goods, misc shopping, moonshot, party, and
-gifts/wants/non-essentials. Not a fixed set — the endpoint should match on whatever lists
-exist rather than hard-coding these.
+### Not verified
+The iPhone Shortcut itself, on a real iPhone — the endpoint it calls is tested, the Shortcut
+around it is not. Nothing on Android. And the More → Add by voice screen has only been seen
+signed out; making and revoking a token needs an account, which only Brian can create.
 
-### Do not promise
-"Hey Google, add eggs" on Android, until step 4 has actually been run on Brian's phone.
+## Phase 13 — hands-free on Android. Next. Opus 5, low effort, mostly testing on the phone.
+
+The endpoint exists now, so this phase is about finding a trigger, not building anything. Run
+step 4 below before promising anything.
+
+1. **Test whether a Bixby quick command passes dictated text to a web request.** "Hi Bixby"
+   wakes screen-off on the S23 Ultra and quick commands take a trigger phrase, but whether the
+   spoken *item* reaches the request is unconfirmed, and the documentation does not say.
+   Twenty minutes on the real phone settles it. If it works, Brian is done.
+2. **If it does not:** bridge through a list app Google natively supports. Brian says the
+   normal Google phrase, Google writes to its own list, Cardamom pulls it in on a timer.
+   Supported and durable, so it will not break on the next Gemini update, but it needs a Google
+   sign-in and is not instant.
+3. **Or Tasker with AutoVoice and its own hotword.** Fully flexible, but a different wake word
+   than "Hey Google" and it listens continuously, which costs battery.
+
+### Do not go looking again
+The direct route is closed. Google removed Assistant triggers that take variable input on
+2022-08-31 and removed conversational actions entirely, which is the machinery IFTTT and
+similar were built on. Since Gemini replaced Assistant, binding a custom "hey Google" phrase to
+a third-party action does not reliably work by any method. Checked 2026-11-17.
 
 
 ## Older notes — checked on 2026-11-15
