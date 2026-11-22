@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { clampQty, parseQty, stepQty } from '../lib/ingredients.js'
 
@@ -74,13 +75,18 @@ export function Page({ title, onBack, actions, children, className = '', footer 
 
 /** Bottom sheet. */
 export function Sheet({ title, onClose, children, tall }) {
-  return (
+  // Rendered into the body rather than where it is written. The tab pane carries a transform
+  // for its slide animation, which makes a stacking context, and a sheet rendered inside it
+  // can never rise above the tab bar however high its z-index — the lower half of a menu ends
+  // up behind the tabs and unreachable. Going through the body sidesteps that entirely.
+  return createPortal(
     <div className="scrim" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <section className={`sheet ${tall ? 'tall' : ''}`} role="dialog" aria-label={title}>
         <header className="sheet-head"><h3>{title}</h3><IconBtn icon="close" label="Close" onClick={onClose} /></header>
         <div className="sheet-body">{children}</div>
       </section>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
