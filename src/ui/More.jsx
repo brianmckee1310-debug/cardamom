@@ -65,6 +65,12 @@ export default function More() {
         <ul className="list">
           <Row icon="mic" title="Add by voice" sub={s.household ? 'Siri and other shortcuts, without opening the app' : 'Available once household sync is on'} onClick={() => s.household ? app.push('voiceAdding') : app.toast('Turn on household sync first')} />
         </ul>
+        <div className="card">
+          <label className="switchrow">
+            <span className="row-text"><b>Start listening when the app opens</b><small>So &ldquo;Hey Google, open Cardamom&rdquo; goes straight to listening. Say an item, then another, then &ldquo;done&rdquo;. Tap Done or stay quiet to leave it.</small></span>
+            <input type="checkbox" checked={!!s.voiceOnOpen} onChange={(e) => setSetting('voiceOnOpen', e.target.checked)} />
+          </label>
+        </div>
         <h3 className="group-h">AI helper</h3>
         <div className="card">
           <Field label="Gemini key" hint="Free from aistudio.google.com (Get API key). Stored on this device only, so paste it on each phone."><input value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste key" autoComplete="off" spellCheck={false} /></Field>
@@ -238,7 +244,7 @@ export function VoiceAdding() {
       <h3 className="group-h">Setting it up</h3>
       <div className="card prose">
         <p><b>iPhone.</b> Shortcuts app, new shortcut, two actions: <i>Dictate Text</i>, then <i>Get Contents of URL</i>. Paste the copied link into the URL and drop the Dictated Text onto the end of it. Name it &ldquo;Add to Cardamom&rdquo;. Then say &ldquo;Hey Siri, add to Cardamom&rdquo;.</p>
-        <p><b>Android.</b> Anything that can open a web address works &mdash; a home screen shortcut, Samsung&rsquo;s Modes and Routines, HTTP Shortcuts, Tasker. Hands-free on Android is still being worked out; see the roadmap.</p>
+        <p><b>Android.</b> There is no way to get a spoken item from &ldquo;Hey Google&rdquo; into a web address any more, so the link below is for taps rather than voice &mdash; a home screen shortcut, Samsung&rsquo;s Modes and Routines, HTTP Shortcuts, Tasker. For hands-free on Android, turn on <i>Start listening when the app opens</i> under More, then say &ldquo;Hey Google, open Cardamom&rdquo; and reel off your items.</p>
         <p><b>What it understands.</b> &ldquo;Eggs&rdquo; on its own, or &ldquo;add two pounds of carrots&rdquo;, or &ldquo;add nails to the hardware store&rdquo;. No list named means the grocery list. It combines with anything already on that list rather than adding a second line.</p>
         <p className="muted small">Anyone holding the link can add to your lists, so treat it like a key. It cannot read your recipes or change anything else.</p>
       </div>

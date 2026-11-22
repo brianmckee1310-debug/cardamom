@@ -487,3 +487,28 @@ button.twist { width: 30px; height: 34px; border-radius: 8px; color: var(--muted
 @media (prefers-reduced-motion: reduce) { .list.tokens .token-row.just-made { animation: none; } }
 .card.prose p { margin: 0 0 10px; line-height: 1.5; }
 .card.prose p:last-child { margin-bottom: 0; }
+
+/* --- Hands-free adding ------------------------------------------------------------------ */
+.hf { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 24px;
+      background: color-mix(in oklab, var(--bg) 92%, black); animation: hf-in .22s var(--out) both; }
+@keyframes hf-in { from { opacity: 0; } to { opacity: 1; } }
+.hf-inner { width: 100%; max-width: 420px; text-align: center; display: grid; gap: 18px; justify-items: center; }
+.hf-orb { position: relative; width: 108px; height: 108px; border-radius: 50%; display: grid; place-items: center;
+          background: var(--accent); color: var(--accent-ink); transition: background .25s var(--out), transform .25s var(--out); }
+.hf-orb.working { background: var(--muted); transform: scale(.94); }
+.hf-orb.speaking { background: var(--warm); color: var(--warm-ink); }
+/* Two rings a half-cycle apart: enough motion to read "it is listening" across a kitchen,
+   not so much that it nags while you think of the next thing. */
+.hf-ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--accent); opacity: 0; }
+.hf-orb.listening .hf-ring { animation: hf-pulse 2.2s ease-out infinite; }
+.hf-orb.listening .hf-ring.two { animation-delay: 1.1s; }
+@keyframes hf-pulse { 0% { transform: scale(1); opacity: .55; } 100% { transform: scale(1.65); opacity: 0; } }
+.hf-state { font-size: 21px; line-height: 1.35; margin: 0; min-height: 1.4em; font-weight: 600; }
+.hf-hint { margin: -10px 0 0; color: var(--muted-ink); font-size: 14px; }
+.hf-added { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; width: 100%; }
+.hf-added li { font-size: 14px; color: var(--muted-ink); padding: 7px 11px; border-radius: 10px;
+               background: color-mix(in oklab, var(--accent) 12%, transparent); animation: rise .2s var(--out) both; }
+.hf-done { margin-top: 4px; min-height: 48px; }
+.switchrow { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 44px; }
+.switchrow input { width: 22px; height: 22px; flex: 0 0 auto; }
+@media (prefers-reduced-motion: reduce) { .hf, .hf-orb, .hf-ring, .hf-added li { animation: none !important; transition: none !important; } }

@@ -63,6 +63,23 @@ export async function runCommand(said, app) {
   }
 }
 
+/** Speak, then carry on. The callback always runs, even where onend never fires. */
+export function speakThen(text, done) {
+  let ran = false
+  const once = () => { if (ran) return; ran = true; done() }
+  if (!canSpeak() || !text) return once()
+  try {
+    speechSynthesis.cancel()
+    const u = new SpeechSynthesisUtterance(text)
+    u.rate = 1.02
+    u.onend = once
+    u.onerror = once
+    speechSynthesis.speak(u)
+    // Some Android voices never fire onend. Carry on anyway rather than hanging silently.
+    setTimeout(once, 1200 + text.length * 70)
+  } catch { once() }
+}
+
 /**
  * The microphone, available from any screen. One tap, one sentence, one thing done — it is
  * not an always-on assistant, which would be both a battery and a privacy problem.
@@ -101,12 +118,6 @@ export default function VoiceButton({ hidden }) {
     try { r.start(); setState('listening'); setText('') } catch { setState('idle') }
   }, [app, state, finish])
 
-  // ?voice=1, or the home-screen shortcut, opens straight into listening
-  useEffect(() => {
-    const q = new URLSearchParams(location.search)
-    if (q.get('voice') === '1') { history.replaceState({}, '', location.pathname); setTimeout(start, 400) }
-  }, [])
-
   if (hidden) return null
   const label = state === 'listening' ? 'Listening, tap to stop' : 'Speak a command'
   return (
@@ -137,4 +148,90 @@ export function Dictate({ onText, label = 'Dictate' }) {
     try { r.start(); setOn(true) } catch { setOn(false) }
   }
   return <button type="button" className={`iconbtn dictate ${on ? 'on' : ''}`} aria-label={label} title={label} onClick={start}><Icon name="mic" size={18} /></button>
+}
+
+
+// Ways of saying you have finished, which only mean that inside a hands-free session.
+const ENOUGH = /^(done|finished|(that'?s|that is) (all|it|everything)|thank you|thanks|all set|no more)$/
+
+/**
+ * Hands-free adding: listen, add, say it back, listen again, until you say you are done or
+ * stop talking. Built for a full pair of hands — nothing here needs a tap, and the one tap
+ * there is, is large. The single-shot microphone above is still the right thing when you are
+ * holding the phone; this is for when you are not.
+ */
+export function HandsFree({ onClose }) {
+  const app = useApp()
+  useKind('recipe'); useKind('glist')
+  const [ui, setUi] = useState({ state: 'listening', heard: '', said: '' })
+  const [added, setAdded] = useState([])
+
+  useEffect(() => {
+    if (!SR) { app.toast('This browser cannot listen. Chrome on Android can.'); onClose(); return }
+    let closed = false
+    let rec = null
+    let idle = null
+    const finish = (farewell) => {
+      if (closed) return
+      closed = true
+      clearTimeout(idle)
+      try { rec?.abort() } catch { /* not running */ }
+      if (farewell) say(farewell)
+      onClose()
+    }
+
+    const listen = () => {
+      if (closed) return
+      const r = new SR()
+      rec = r
+      r.lang = navigator.language || 'en-US'
+      r.interimResults = false
+      r.maxAlternatives = 1
+      r.onresult = async (e) => {
+        if (closed) return
+        clearTimeout(idle)
+        const text = e.results[0][0].transcript
+        setUi({ state: 'working', heard: text, said: '' })
+        const cmd = parseCommand(text, { lists: listKind('glist'), recipes: listKind('recipe') })
+        if (cmd?.kind === 'stop' || ENOUGH.test(text.trim().toLowerCase().replace(/[.!?]+$/, ''))) return finish('Done')
+        let msg, ok = false
+        try { const out = await runCommand(text, app); msg = out.text || `I did not understand "${text}".`; ok = out.ok }
+        catch (err) { msg = err.message || 'That did not work.' }
+        if (closed) return
+        if (ok) setAdded((a) => [...a, msg])
+        setUi({ state: 'speaking', heard: text, said: msg })
+        speakThen(msg, () => { if (!closed) listen() })
+      }
+      r.onerror = (ev) => {
+        if (closed) return
+        // Silence is how you finish when your hands are full: stop talking and it stops.
+        if (ev.error === 'no-speech' || ev.error === 'aborted') return finish('')
+        if (ev.error === 'not-allowed') { app.toast('The microphone is blocked. Allow it in the browser settings.'); return finish('') }
+        setTimeout(() => { if (!closed) listen() }, 250)
+      }
+      try {
+        r.start()
+        setUi((u) => ({ ...u, state: 'listening' }))
+        idle = setTimeout(() => finish(''), 12000)
+      } catch { finish('') }
+    }
+
+    listen()
+    return () => { closed = true; clearTimeout(idle); try { rec?.abort() } catch { /* not running */ } }
+  }, [])
+
+  const caption = ui.state === 'working' ? 'Adding' : ui.state === 'speaking' ? '' : 'Listening'
+  return (
+    <div className="hf" role="dialog" aria-modal="true" aria-label="Hands-free adding">
+      <div className="hf-inner">
+        <div className={`hf-orb ${ui.state}`} aria-hidden="true"><Icon name="mic" size={34} /><span className="hf-ring" /><span className="hf-ring two" /></div>
+        <p className="hf-state" role="status">{ui.said || ui.heard || caption}</p>
+        {caption && !ui.said && <p className="hf-hint">Say an item, or &ldquo;done&rdquo; when you have finished.</p>}
+        {added.length > 0 && (
+          <ul className="hf-added">{added.map((a, i) => <li key={i}>{a}</li>)}</ul>
+        )}
+        <button className="btn block hf-done" onClick={onClose}>Done</button>
+      </div>
+    </div>
+  )
 }

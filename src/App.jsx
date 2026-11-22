@@ -13,7 +13,7 @@ import FoodLog from './ui/FoodLog.jsx'
 import LogAdd, { LogEntry, LogTargets, LogRange } from './ui/LogSheets.jsx'
 import { RecipePicker, AddToGroceries, AddToPlan, ItemEdit, AddToMenu } from './ui/Sheets.jsx'
 import { firstUrl } from './lib/importers.js'
-import VoiceButton from './ui/Voice.jsx'
+import VoiceButton, { HandsFree } from './ui/Voice.jsx'
 import { guessMeal } from './lib/log.js'
 
 // Split out of the first load: Import pulls in the zip reader, More pulls in the Supabase
@@ -90,6 +90,17 @@ export default function App() {
     return () => { on = false; document.removeEventListener('visibilitychange', vis); lock?.release?.().catch(() => {}) }
   }, [])
 
+  // Hands-free adding. Either the ?voice=1 shortcut asked for it, or the setting says every
+  // launch should start listening — which is what makes "Hey Google, open Cardamom" useful.
+  const [handsFree, setHandsFree] = useState(false)
+  useEffect(() => {
+    if (!store.ready) return
+    const q = new URLSearchParams(location.search)
+    const asked = q.get('voice') === '1'
+    if (asked) history.replaceState({}, '', location.pathname)
+    if (asked || settings.voiceOnOpen) setHandsFree(true)
+  }, [store.ready])
+
   // home-screen shortcuts and deep links land on the right screen, ready to go
   useEffect(() => {
     if (!store.ready) return // a ?cook= link needs the library loaded before it can find the recipe
@@ -138,6 +149,7 @@ export default function App() {
         )}
         <Suspense fallback={null}>{stack.map((s) => { const V = VIEWS[s.type]; return V ? <V key={s.key} {...s.props} /> : null })}</Suspense>
         <VoiceButton hidden={['cook', 'weekGlance'].includes(stack[stack.length - 1]?.type)} />
+        {handsFree && <HandsFree onClose={() => setHandsFree(false)} />}
         <div className="toasts" aria-live="polite">
           {store.error && <div className="toast err"><span>{store.error}</span><button onClick={clearError}>OK</button></div>}
           {toasts.map((t) => <div className="toast" key={t.id}><span>{t.text}</span>{t.undo && <button onClick={() => { t.undo(); setToasts((x) => x.filter((y) => y.id !== t.id)) }}>Undo</button>}</div>)}

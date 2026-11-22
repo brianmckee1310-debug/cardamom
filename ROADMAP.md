@@ -1,6 +1,6 @@
 # Cardamom roadmap
 
-Personal Paprika-style recipe manager for Brian and his wife. Updated 2026-11-18, version 1.9.0.
+Personal Paprika-style recipe manager for Brian and his wife. Updated 2026-11-22, version 1.10.0.
 
 Live at https://brianmckee1310-debug.github.io/cardamom/
 Code at https://github.com/brianmckee1310-debug/cardamom (Pages serves `main` / `/docs`)
@@ -20,7 +20,8 @@ Source on disk at `C:\Users\brian\Claude\Projects\Cardamom`
 | 10 | Less scrolling: a recipe in tabs | Done | |
 | 11 | Mobile only | Done | |
 | 12 | Add to a list by voice | Done (Android trigger still open) | |
-| 13 | Hands-free on Android | Next | Opus 5, low effort — mostly testing on the phone |
+| 13 | Hands-free on Android | Done | |
+| 14 | What real kitchen use turns up | Next | Opus 5, medium effort — after you have used it |
 
 ## Phase 11, done on 2026-11-17 — version 1.8.0
 
@@ -288,28 +289,49 @@ The iPhone Shortcut itself, on a real iPhone — the endpoint it calls is tested
 around it is not. Nothing on Android. And the More → Add by voice screen has only been seen
 signed out; making and revoking a token needs an account, which only Brian can create.
 
-## Phase 13 — hands-free on Android. Next. Opus 5, low effort, mostly testing on the phone.
+## Phase 13, done on 2026-11-22 — version 1.10.0
 
-The endpoint exists now, so this phase is about finding a trigger, not building anything. Run
-step 4 below before promising anything.
+Brian's goal was hands full, screen off, "hey, add eggs to the grocery list". Android cannot
+do the screen-off half, and the research below settles why. What it can do, it now does well.
 
-1. **Test whether a Bixby quick command passes dictated text to a web request.** "Hi Bixby"
-   wakes screen-off on the S23 Ultra and quick commands take a trigger phrase, but whether the
-   spoken *item* reaches the request is unconfirmed, and the documentation does not say.
-   Twenty minutes on the real phone settles it. If it works, Brian is done.
-2. **If it does not:** bridge through a list app Google natively supports. Brian says the
-   normal Google phrase, Google writes to its own list, Cardamom pulls it in on a timer.
-   Supported and durable, so it will not break on the next Gemini update, but it needs a Google
-   sign-in and is not instant.
-3. **Or Tasker with AutoVoice and its own hotword.** Fully flexible, but a different wake word
-   than "Hey Google" and it listens continuously, which costs battery.
+### What was ruled out, and why — do not revisit
+- **Bixby quick commands cannot carry a variable.** A quick command is a fixed stored sentence
+  replayed to Bixby as though you had said it. There is no slot for "whatever I say next", so
+  the item can never reach the endpoint. Settled from documentation; the phone test was not
+  needed.
+- **The Google Keep bridge cannot be read back.** Gemini will happily add to a Keep shopping
+  list by voice, but the Keep API is Workspace-enterprise only and is not available for
+  personal Google accounts, so Cardamom can never see that list. Google's own Keep list adds
+  had also been breaking for people around August 2026.
+- Taken with the Phase 12 finding (Google removed Assistant triggers that take variable input
+  in 2022, and Gemini broke the Tasker workaround), **no supported path exists** on Android for
+  a spoken item to reach a web address. Checked 2026-11-22.
 
-### Do not go looking again
-The direct route is closed. Google removed Assistant triggers that take variable input on
-2022-08-31 and removed conversational actions entirely, which is the machinery IFTTT and
-similar were built on. Since Gemini replaced Assistant, binding a custom "hey Google" phrase to
-a third-party action does not reliably work by any method. Checked 2026-11-17.
+### What was built instead
+- **Continuous hands-free mode.** Say an item, hear it confirmed out loud, say the next one,
+  then say "done". Nothing is tapped between items. It ends on "done", "that's all", "thanks"
+  and similar, on the Done button, or on twelve seconds of silence — staying quiet is a
+  perfectly good way to finish when your hands are full.
+- **An opt-in setting, More → "Start listening when the app opens".** With it on, "Hey Google,
+  open Cardamom" lands in listening mode, which is the closest Android gets to the original
+  ask: the screen comes on, but nothing is touched. Off by default, because it would otherwise
+  hijack opening the app to browse.
+- The ways of saying you are finished live in `Voice.jsx`, not in `src/lib/voice.js`, because
+  they only mean that inside a session — the endpoint has no use for "done" and the three
+  copied libraries stay byte-identical, so the drift guard stays green and the edge function
+  did not need redeploying.
 
+### Checked
+114 unit tests, including the session-ending phrases against things you would actually buy
+("done" ends it, "done pasta" and "thank you cards" do not). Production build clean. The
+settings row and the overlay were looked at on the live site.
+
+### Not verified
+**The listening loop itself has never heard a human voice.** I cannot speak into your phone,
+and speech recognition needs a real microphone, so the add-hear-add-again cycle, the spoken
+confirmations and the twelve-second silence timeout are untested end to end. That is the first
+thing to try, and the most likely place for something to be wrong.
+Nothing has been tried on a real phone at all, and still no account, household or token exists.
 
 ## Older notes — checked on 2026-11-15
 - 60 unit tests pass (51 from before, plus 9 new covering typed amounts, the stepper ladder,

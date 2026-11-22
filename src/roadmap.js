@@ -1,5 +1,5 @@
 // Single source for the in-app roadmap. `npm run roadmap` prints it.
-export const VERSION = '1.9.0'
+export const VERSION = '1.10.0'
 export const ROADMAP = [
   { n: 1, name: 'Recipe library and Paprika import', status: 'done', items: 'Library, search, categories, ratings, favorites, photos, editor, scaling and unit conversion, Paprika import and export' },
   { n: 2, name: 'Kitchen tools', status: 'done', items: 'Grocery list by aisle, pantry, weekly meal planner, menus, cook mode, timers, hands-free voice' },
@@ -13,6 +13,7 @@ export const ROADMAP = [
   { n: 10, name: 'Less scrolling', status: 'done', items: 'Ingredients, Directions and More as tabs on a phone, sticky so they stay reachable; both columns still side by side on a wide screen and when printing' },
   { n: 11, name: 'Mobile only', status: 'done', items: 'Desktop layout dropped; every screen designed at phone width, every tap target at least 44px, and a big screen just centres the phone column' },
   { n: 12, name: 'Add to a list by voice', status: 'done', items: 'A token-authenticated endpoint so an iPhone Shortcut, or anything else that can make a web request, can drop an item on a list without opening the app. Per-device tokens under More.' },
-  { n: 13, name: 'Hands-free on Android', status: 'next', items: 'Find a trigger that works screen-off: test whether a Bixby quick command passes dictated text through, otherwise bridge through a list app Google supports natively', needs: 'Opus 5, low effort — mostly testing on the phone' },
+  { n: 13, name: 'Hands-free on Android', status: 'done', items: 'Continuous listening: say an item, hear it back, say the next, say "done". An opt-in setting starts it on launch, so "Hey Google, open Cardamom" goes straight to listening. No app can take a spoken item from "Hey Google" into a web address any more, so this is as close as Android gets.' },
+  { n: 14, name: 'What real kitchen use turns up', status: 'next', items: 'Both accounts made, the household joined, and a week of actually cooking with it. Whatever annoys you is this phase.', needs: 'Opus 5, medium effort — after you have used it' },
 ]
 if (typeof process !== 'undefined' && process.argv?.[1]?.endsWith('roadmap.js')) for (const p of ROADMAP) console.log(`${p.n}. [${p.status}] ${p.name}${p.needs ? ' (' + p.needs + ')' : ''}`)
