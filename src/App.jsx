@@ -22,10 +22,10 @@ const ImportSheet = lazy(() => import('./ui/Import.jsx'))
 const Barcode = lazy(() => import('./ui/Barcode.jsx'))
 const More = lazy(() => import('./ui/More.jsx'))
 const named = (key) => lazy(() => import('./ui/More.jsx').then((m) => ({ default: m[key] })))
-const Household = named('Household'), Roadmap = named('Roadmap'), Categories = named('Categories'), Trash = named('Trash'), Aisles = named('Aisles'), MealTypes = named('MealTypes'), VoiceAdding = named('VoiceAdding')
+const Household = named('Household'), Roadmap = named('Roadmap'), Categories = named('Categories'), Trash = named('Trash'), Aisles = named('Aisles'), MealTypes = named('MealTypes'), VoiceAdding = named('VoiceAdding'), WeekStart = named('WeekStart')
 
-const TABS = [['recipes', 'Recipes', 'book'], ['log', 'Log', 'bowl'], ['groceries', 'Groceries', 'cart'], ['planner', 'Planner', 'calendar'], ['pantry', 'Pantry', 'jar'], ['more', 'More', 'more']]
-const VIEWS = { recipe: RecipeView, edit: RecipeEdit, cook: CookMode, import: ImportSheet, menus: Menus, menu: MenuView, household: Household, roadmap: Roadmap, categories: Categories, barcode: Barcode, pick: RecipePicker, addToGroceries: AddToGroceries, addToPlan: AddToPlan, itemEdit: ItemEdit, addToMenu: AddToMenu, logAdd: LogAdd, logEntry: LogEntry, logTargets: LogTargets, logRange: LogRange, weekGlance: WeekGlance, cookable: Cookable, trash: Trash, aisles: Aisles, mealTypes: MealTypes, voiceAdding: VoiceAdding }
+const TABS = [['recipes', 'Recipes', 'book'], ['planner', 'Planner', 'calendar'], ['groceries', 'Groceries', 'cart'], ['log', 'Log', 'bowl'], ['pantry', 'Pantry', 'jar'], ['more', 'More', 'more']]
+const VIEWS = { recipe: RecipeView, edit: RecipeEdit, cook: CookMode, import: ImportSheet, menus: Menus, menu: MenuView, household: Household, roadmap: Roadmap, categories: Categories, barcode: Barcode, pick: RecipePicker, addToGroceries: AddToGroceries, addToPlan: AddToPlan, itemEdit: ItemEdit, addToMenu: AddToMenu, logAdd: LogAdd, logEntry: LogEntry, logTargets: LogTargets, logRange: LogRange, weekGlance: WeekGlance, cookable: Cookable, trash: Trash, aisles: Aisles, mealTypes: MealTypes, voiceAdding: VoiceAdding, weekStart: WeekStart }
 const TAB_COMPONENTS = { recipes: Recipes, log: FoodLog, groceries: Grocery, planner: Planner, pantry: Pantry, more: More }
 const fmt = (s) => { s = Math.max(0, Math.ceil(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0') }
 
@@ -148,7 +148,7 @@ export default function App() {
           </div>
         )}
         <Suspense fallback={null}>{stack.map((s) => { const V = VIEWS[s.type]; return V ? <V key={s.key} {...s.props} /> : null })}</Suspense>
-        <VoiceButton hidden={['cook', 'weekGlance'].includes(stack[stack.length - 1]?.type)} />
+        <VoiceButton hidden={['cook', 'weekGlance'].includes(stack[stack.length - 1]?.type) || (tab === 'recipes' && !stack.length)} />
         {handsFree && <HandsFree onClose={() => setHandsFree(false)} />}
         <div className="toasts" aria-live="polite">
           {store.error && <div className="toast err"><span>{store.error}</span><button onClick={clearError}>OK</button></div>}

@@ -73,8 +73,9 @@ export default function Recipes() {
       <header className="top">
         <button className="top-title" onClick={() => setPicking(true)} aria-label="Choose category"><h1>{title}</h1><small>{shown.length}</small><Icon name="chevron" size={16} className="ico down" /></button>
         <IconBtn icon="sort" label={`Sort: ${SORTS.find((s) => s[0] === sort)[1]}`} onClick={() => setSetting('sort', SORTS[(SORTS.findIndex((s) => s[0] === sort) + 1) % SORTS.length][0])} />
-        <IconBtn icon="plus" label="Add recipe" className="accent" onClick={() => push('import')} />
+        <IconBtn icon="mic" label="Speak a command" onClick={() => window.dispatchEvent(new Event('cardamom:listen'))} />
       </header>
+      <button className="fab" onClick={() => push('import')} aria-label="Add recipe" title="Add recipe"><Icon name="plus" size={24} /></button>
       <div className="search"><Icon name="search" size={18} /><input type="search" placeholder="Search name, ingredient, source" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search recipes" />{sort !== 'name' && <span className="pill">{SORTS.find((s) => s[0] === sort)[1]}</span>}</div>
       {recipes.length === 0 ? (
         <Empty icon="book" title="No recipes yet">

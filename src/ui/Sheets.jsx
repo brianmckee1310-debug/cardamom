@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { useKind, getItem, saveItems, saveItem, removeItem, listKind, useSettings, setSetting, getSettings } from '../store.js'
-import { mergeIntoList, looseMatch } from '../lib/grocery.js'
+import { mergeIntoList, looseMatch, quickItem } from '../lib/grocery.js'
 import { useDoubleTap } from './Grocery.jsx'
 import { useApp, Sheet, Icon, Field, fmtDate, today } from './bits.jsx'
 import { RecipeRow, searchRecipes } from './Recipes.jsx'
@@ -84,10 +84,24 @@ export function AddToPlan({ recipeId, date, meal }) {
   const [type, setType] = useState(meal?.type || (mealTypeList(getSettings()).includes('Dinner') ? 'Dinner' : mealTypeList(getSettings())[0]))
   const [title, setTitle] = useState(meal?.title || r?.name || '')
   const [note, setNote] = useState(meal?.note || '')
+  // Planning "taco night" without the shopping is how you end up at the shop with no tortillas.
+  const [buy, setBuy] = useState('')
   const save = async () => {
     if (!title.trim()) return
     await saveItem({ ...(meal || {}), kind: 'meal', date: d, type, title: title.trim(), note, recipeId: recipeId || meal?.recipeId || null })
-    app.back(); app.toast(meal ? 'Meal updated' : `Planned for ${new Date(d + 'T12:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}`)
+    const wanted = splitLines(buy).filter(Boolean)
+    let bought = 0
+    if (wanted.length) {
+      const aisles = aisleList(getSettings())
+      const existing = listKind('grocery').filter((e) => !(e.list || ''))
+      const incoming = wanted.map((line) => ({ ...quickItem(line, 'grocery', aisles), done: false, recipe: title.trim() }))
+      const out = mergeIntoList(existing, incoming)
+      await saveItems(out)
+      bought = wanted.length
+    }
+    const when = new Date(d + 'T12:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
+    app.back()
+    app.toast(meal ? 'Meal updated' : `Planned for ${when}${bought ? ` · ${bought} on the grocery list` : ''}`)
   }
   const quick = [0, 1, 2, 3, 4, 5, 6].map((n) => { const x = new Date(); x.setDate(x.getDate() + n); return x })
   return (
@@ -99,6 +113,9 @@ export function AddToPlan({ recipeId, date, meal }) {
       <span className="field-label">Meal</span>
       <div className="seg wrap">{mealTypeList(settings).map((t) => <button key={t} className={type === t ? 'on' : ''} onClick={() => setType(t)}>{t}</button>)}</div>
       <Field label="Note"><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" /></Field>
+      <Field label="Anything to buy for it?" hint="One per line. These go on the grocery list, tagged with this meal, and combine with anything already there.">
+        <textarea rows={3} value={buy} onChange={(e) => setBuy(e.target.value)} placeholder={'tortillas\n1 lb ground beef\nsour cream'} />
+      </Field>
       <div className="rowline">
         {meal && <button className="btn danger" onClick={async () => { await removeItem(meal.id); app.back(); app.removed('Meal removed', meal.id) }}>Remove</button>}
         <button className="btn primary grow" onClick={save}>{meal ? 'Save' : 'Add to plan'}</button>

@@ -68,7 +68,7 @@ export default function Barcode({ target: t0 = 'grocery', date, meal }) {
       app.replace('logAdd', { date: date || today(), meal: meal || guessMeal(), draft })
       return
     }
-    await saveItem(target === 'pantry' ? { kind: 'pantry', name: name.trim(), qty: '', aisle: guessAisle(name, aisleList(getSettings())), inStock: true, barcode: code } : { kind: 'grocery', name: name.trim(), qty: '', aisle: guessAisle(name, aisleList(getSettings())), done: false, barcode: code })
+    await saveItem(target === 'pantry' ? { kind: 'pantry', name: name.trim(), qty: '', aisle: guessAisle(name, aisleList(getSettings())), inStock: true, barcode: code, added: today() } : { kind: 'grocery', name: name.trim(), qty: '', aisle: guessAisle(name, aisleList(getSettings())), done: false, barcode: code })
     app.toast(`${name.trim()} added to ${target === 'pantry' ? 'pantry' : 'groceries'}`)
     setName(''); setCode(''); setState('scan'); setTimeout(() => { last.current = '' }, 2500)
   }

@@ -11,13 +11,30 @@ import { aiCfg, hasAi } from '../lib/importers.js'
 export const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
 export const canSpeak = () => typeof window !== 'undefined' && 'speechSynthesis' in window
 
+/** The voices this phone has. Empty until the browser has loaded them; see onVoices. */
+export const allVoices = () => { try { return canSpeak() ? speechSynthesis.getVoices() : [] } catch { return [] } }
+/** Browsers fill the voice list asynchronously, so screens that show it have to be told. */
+export function onVoices(fn) {
+  if (!canSpeak()) return () => {}
+  speechSynthesis.addEventListener('voiceschanged', fn)
+  return () => speechSynthesis.removeEventListener('voiceschanged', fn)
+}
+/** The chosen voice, or nothing, which leaves the browser to pick as before. */
+export function chosenVoice() {
+  const want = getSettings().voiceName
+  if (!want) return null
+  return allVoices().find((v) => v.name === want) || null
+}
+
 /** Say something out loud, so a confirmation lands without looking at the screen. */
-export function say(text) {
+export function say(text, voice) {
   if (!canSpeak() || !text) return
   try {
     speechSynthesis.cancel()
     const u = new SpeechSynthesisUtterance(text)
     u.rate = 0.98
+    const v = voice || chosenVoice()
+    if (v) u.voice = v
     speechSynthesis.speak(u)
   } catch { /* nothing to be done */ }
 }
@@ -72,6 +89,8 @@ export function speakThen(text, done) {
     speechSynthesis.cancel()
     const u = new SpeechSynthesisUtterance(text)
     u.rate = 1.02
+    const v = chosenVoice()
+    if (v) u.voice = v
     u.onend = once
     u.onerror = once
     speechSynthesis.speak(u)
@@ -94,7 +113,7 @@ export default function VoiceButton({ hidden }) {
 
   const finish = useCallback((t, ok) => {
     setText(t); setState(t ? 'said' : 'idle')
-    if (t) { say(t); if (!ok) app.toast(t) }
+    if (t) say(t) // the bubble below already shows this; a toast as well put two on top of each other
     clearTimeout(timer.current)
     timer.current = setTimeout(() => { setState('idle'); setText('') }, 4000)
   }, [app])
@@ -117,6 +136,14 @@ export default function VoiceButton({ hidden }) {
     r.onend = () => setState((s) => (s === 'listening' ? 'idle' : s))
     try { r.start(); setState('listening'); setText('') } catch { setState('idle') }
   }, [app, state, finish])
+
+  // The Recipes screen moved its microphone into the header, where it has no access to this
+  // component's state, so it asks for a listen through the window instead.
+  useEffect(() => {
+    const go = () => start()
+    window.addEventListener('cardamom:listen', go)
+    return () => window.removeEventListener('cardamom:listen', go)
+  }, [start])
 
   if (hidden) return null
   const label = state === 'listening' ? 'Listening, tap to stop' : 'Speak a command'

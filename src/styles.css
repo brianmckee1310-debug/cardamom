@@ -140,7 +140,7 @@ details { margin: 12px 0; } summary { color: var(--accent); font-weight: 600; ma
 .bar-title { flex: 1; min-width: 0; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar-actions { display: flex; align-items: center; gap: 0; padding-right: 4px; }
 .page-body { flex: 1; overflow-y: auto; min-height: 0; padding-top: 10px; }
-.scrim { position: fixed; inset: 0; z-index: 40; background: rgba(38, 31, 22, .5); display: flex; align-items: flex-end; justify-content: center; animation: fade .18s var(--out) both; }
+.scrim { position: fixed; left: 0; right: 0; top: 0; height: 100dvh; z-index: 40; background: rgba(38, 31, 22, .5); display: flex; align-items: flex-end; justify-content: center; animation: fade .18s var(--out) both; }
 .sheet { width: 100%; max-width: 560px; max-height: 88dvh; background: var(--surface); border-radius: 20px 20px 0 0; display: flex; flex-direction: column; animation: sheetup .28s var(--out) both; box-shadow: var(--shadow); }
 .sheet.tall { height: 88dvh; }
 .sheet-head { display: flex; align-items: center; padding: 12px 8px 4px 18px; flex: none; }
@@ -253,7 +253,7 @@ details { margin: 12px 0; } summary { color: var(--accent); font-weight: 600; ma
   .app { background: var(--bg); box-shadow: 0 0 0 1px var(--line); }
   .tabs, .page, .scrim, .glance { left: var(--side); right: var(--side); }
   .toasts, .timers { left: calc(var(--side) + 12px); right: calc(var(--side) + 12px); }
-  .mic { right: calc(var(--side) + 14px); }
+  .mic, .fab { right: calc(var(--side) + 14px); }
   .mic-said { left: calc(var(--side) + 14px); right: calc(var(--side) + 78px); }
 }
 
@@ -515,3 +515,11 @@ button.twist { width: 30px; height: 34px; border-radius: 8px; color: var(--muted
 .switchrow .row-text { display: grid; gap: 3px; }
 .switchrow .row-text small { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.4; }
 @media (prefers-reduced-motion: reduce) { .hf, .hf-orb, .hf-ring, .hf-added li { animation: none !important; transition: none !important; } }
+
+/* The add button on Recipes takes the thumb-reachable corner the microphone used to hold. */
+.fab { position: fixed; right: 14px; bottom: calc(var(--tabs) + var(--sab) + 14px); z-index: 9;
+       width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
+       background: var(--accent); color: var(--accent-ink); box-shadow: var(--shadow);
+       transition: transform .18s var(--out); }
+.fab:active { transform: scale(.92); }
+@media print { .fab { display: none !important; } }

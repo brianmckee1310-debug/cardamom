@@ -4,6 +4,7 @@ import { useApp, Page, Icon, Field, Busy, Empty } from './bits.jsx'
 import { ROADMAP, VERSION } from '../roadmap.js'
 import { sb, sbConfig, BUILT_IN, session, signIn, signUp, signOut, createHousehold, joinHousehold, findHousehold, syncNow, syncStatus, onSyncStatus, functionsUrl } from '../lib/sync.js'
 import { DEFAULT_MODEL, recipeFromText } from '../lib/gemini.js'
+import { allVoices, onVoices, canSpeak, say } from './Voice.jsx'
 import { writePaprikaFile } from '../lib/paprika.js'
 import { buildIcs, mealTypeList, MEAL_TYPES } from '../lib/ics.js'
 import { aisleList, AISLE_ORDER, fallbackAisle } from '../lib/ingredients.js'
@@ -50,6 +51,7 @@ export default function More() {
           <Row icon="trash" title="Recently deleted" sub="Restore a recipe" onClick={() => app.push('trash')} />
           <Row icon="grid" title="Aisles" sub={`${aisleList(s).length} sections, in shop order`} onClick={() => app.push('aisles')} />
           <Row icon="calendar" title="Meal types" sub={mealTypeList(s).join(', ')} onClick={() => app.push('mealTypes')} />
+          <Row icon="calendar" title="Week starts on" sub={WEEK_DAYS[Number(s.weekStart ?? 0)]} onClick={() => app.push('weekStart')} />
         </ul>
         <h3 className="group-h">Your recipes</h3>
         <ul className="list">
@@ -70,6 +72,7 @@ export default function More() {
             <span className="row-text"><b>Start listening when the app opens</b><small>So &ldquo;Hey Google, open Cardamom&rdquo; goes straight to listening. Say an item, then another, then &ldquo;done&rdquo;. Tap Done or stay quiet to leave it.</small></span>
             <input type="checkbox" checked={!!s.voiceOnOpen} onChange={(e) => setSetting('voiceOnOpen', e.target.checked)} />
           </label>
+          <VoicePicker />
         </div>
         <h3 className="group-h">AI helper</h3>
         <div className="card">
@@ -157,6 +160,61 @@ export function Household() {
     </Page>
   )
 }
+
+const WEEK_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+/** Which day the planner's week begins on. A matter of taste, and of country. */
+export function WeekStart() {
+  const app = useApp()
+  const s = useSettings()
+  const cur = Number(s.weekStart ?? 0)
+  return (
+    <Page title="Week starts on" onBack={app.back}>
+      <p className="lead">The planner's week, and the month grid's columns, begin on this day.</p>
+      <ul className="list">
+        {WEEK_DAYS.map((name, i) => (
+          <li key={name} className="row">
+            <button className="row-main" onClick={() => setSetting('weekStart', i)} aria-pressed={cur === i}>
+              <span className={`tick round ${cur === i ? 'on' : ''}`}><Icon name="check" size={15} /></span>
+              <span className="row-text"><b>{name}</b></span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Page>
+  )
+}
+
+
+/**
+ * Which voice reads confirmations back. The list is whatever the phone has installed, so it
+ * differs between his phone and hers, and the choice is per device rather than synced.
+ */
+function VoicePicker() {
+  const s = useSettings()
+  const [list, setList] = useState(() => allVoices())
+  useEffect(() => {
+    const refresh = () => setList(allVoices())
+    refresh()
+    return onVoices(refresh)
+  }, [])
+  if (!canSpeak()) return <p className="muted small nudge">This browser cannot speak, so there is nothing to choose.</p>
+  const lang = (navigator.language || 'en').slice(0, 2)
+  const mine = list.filter((v) => v.lang && v.lang.slice(0, 2) === lang)
+  const shown = mine.length ? mine : list
+  return (
+    <>
+      <Field label="Speaking voice" hint={shown.length ? 'Stored on this device, so you and your wife can each have your own.' : 'No voices are loaded yet. Open this screen again in a moment.'}>
+        <select value={s.voiceName || ''} onChange={(e) => setSetting('voiceName', e.target.value)}>
+          <option value="">Whatever the phone picks</option>
+          {shown.map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
+        </select>
+      </Field>
+      <button className="btn" onClick={() => say('Added two pounds of carrots to groceries')}>Hear it</button>
+    </>
+  )
+}
+
 
 /**
  * Per-device tokens for the voice endpoint. One per phone rather than one per household, so a

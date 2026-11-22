@@ -20,6 +20,7 @@ const P = {
   play: 'M8 5v14l11-7z', mic: 'M12 4a2.5 2.5 0 0 0-2.5 2.5v5a2.5 2.5 0 0 0 5 0v-5A2.5 2.5 0 0 0 12 4zM6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v3',
   timer: 'M12 8v5l3 2M12 5a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM10 2.5h4',
   scale: 'M5 20V4M5 8h14M9 8v8M13 8v5M17 8v10', barcode: 'M4 6v12M7 6v12M10 6v12M14 6v12M17 6v12M20 6v12',
+  pan: 'M3 10h14a0 0 0 0 1 0 0v3a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5zM17 11.5h2.5a1.5 1.5 0 0 0 0-3H18',
   sparkle: 'M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6zM18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z',
   gear: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1',
   sync: 'M5 12a7 7 0 0 1 12-4.9L19 9M19 4v5h-5M19 12a7 7 0 0 1-12 4.9L5 15M5 20v-5h5',
@@ -34,6 +35,20 @@ const P = {
   alert: 'M12 4.5l8.5 15H3.5zM12 10v4M12 17.2h.01',
   info: 'M12 3.2a8.8 8.8 0 1 0 0 17.6 8.8 8.8 0 0 0 0-17.6zM12 11v5.5M12 7.8h.01',
 }
+/** "added today", "added 3 weeks ago" — how long something has been in the house. */
+export function ageText(iso, verb = 'added') {
+  if (!iso) return ''
+  const days = Math.floor((new Date(today() + 'T12:00') - new Date(iso + 'T12:00')) / 86400000)
+  if (!isFinite(days) || days < 0) return ''
+  if (days === 0) return `${verb} today`
+  if (days === 1) return `${verb} yesterday`
+  if (days < 14) return `${verb} ${days} days ago`
+  if (days < 60) return `${verb} ${Math.round(days / 7)} weeks ago`
+  if (days < 365) return `${verb} ${Math.round(days / 30)} months ago`
+  const y = Math.floor(days / 365)
+  return `${verb} over ${y} year${y > 1 ? 's' : ''} ago`
+}
+
 export function Icon({ name, size = 22, fill, ...rest }) {
   return <svg className="ico" width={size} height={size} viewBox="0 0 24 24" fill={fill || 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...rest}><path d={P[name]} /></svg>
 }

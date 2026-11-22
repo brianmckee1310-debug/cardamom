@@ -91,6 +91,7 @@ export default function FoodLog() {
         <IconBtn icon="back" label="Previous day" onClick={() => go(-1)} />
         {date !== today() && <button className="btn small" onClick={() => go(0)}>Today</button>}
         <IconBtn icon="chevron" label="Next day" onClick={() => go(1)} />
+        <IconBtn icon="barcode" label="Scan a barcode" onClick={() => app.push('barcode', { target: 'log', date, meal: guessMeal() })} />
         <IconBtn icon="more" label="Log actions" onClick={() => setMenu(true)} />
         <IconBtn icon="plus" label="Log food" className="accent" onClick={() => add(guessMeal())} />
       </header>

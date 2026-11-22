@@ -53,8 +53,9 @@ export function pantryUpserts(pantry, items, day) {
   const out = []
   for (const it of items) {
     const hit = pantry.find((p) => sameItem(p.name, it.name)) || out.find((p) => sameItem(p.name, it.name))
-    if (hit) { if (hit.inStock === false || hit.seen !== day) { const rec = { ...hit, inStock: true, seen: day }; const at = out.indexOf(hit); if (at >= 0) out[at] = rec; else out.push(rec) } }
-    else out.push({ kind: 'pantry', name: it.name, qty: '', aisle: it.aisle, inStock: true, seen: day })
+    // Buying it again makes today the day you got it, so the age starts over.
+    if (hit) { if (hit.inStock === false || hit.seen !== day) { const rec = { ...hit, inStock: true, seen: day, added: hit.inStock === false || !hit.added ? day : hit.added }; const at = out.indexOf(hit); if (at >= 0) out[at] = rec; else out.push(rec) } }
+    else out.push({ kind: 'pantry', name: it.name, qty: '', aisle: it.aisle, inStock: true, seen: day, added: day })
   }
   return out
 }

@@ -1,5 +1,5 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useKind, useSettings, setSetting, saveItems, getItem } from '../store.js'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useKind, useSettings, setSetting, saveItems, getItem, getSettings } from '../store.js'
 
 import { useApp, Icon, IconBtn, Sheet, fmtDate, today } from './bits.jsx'
 import { mealTypeList, buildIcs } from '../lib/ics.js'
@@ -7,7 +7,12 @@ import DragList from './DragList.jsx'
 import { download } from './RecipeView.jsx'
 
 const noon = (d) => { const x = new Date(d); x.setHours(12, 0, 0, 0); return x }
-const startOfWeek = (d) => { const x = noon(d); x.setDate(x.getDate() - x.getDay()); return x }
+// Which day a week begins on is a matter of taste and of country, so it is a setting.
+// Sunday by default, which is what Brian uses.
+export const weekStartDay = (settings) => Number(settings?.weekStart ?? 0)
+const startOfWeek = (d, first = 0) => { const x = noon(d); x.setDate(x.getDate() - ((x.getDay() - first + 7) % 7)); return x }
+const DOW = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+export const WEEK_START_CHOICES = DOW.map((name, i) => [String(i), name])
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
 const startOfMonth = (d) => { const x = noon(d); x.setDate(1); return x }
 const short = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
@@ -25,6 +30,7 @@ function useMealsByDay() {
 function DayCard({ d, list }) {
   const app = useApp()
   const key = fmtDate(d)
+  const [adding, setAdding] = useState(false)
   const mealRow = (m) => (
     <>
       <button className="meal-main" onClick={() => live(m.recipeId) ? app.push('recipe', { id: m.recipeId }) : app.push('addToPlan', { meal: m })}><small>{m.type}</small><b>{m.title}</b>{m.note && <i>{m.note}</i>}</button>
@@ -35,9 +41,16 @@ function DayCard({ d, list }) {
   return (
     <section className={`day ${key === today() ? 'today' : ''}`}>
       <header><b>{weekday(d)}</b><small>{short(d)}</small>
-        <IconBtn icon="book" label={`Add recipes to ${weekday(d)}`} onClick={addRecipes} />
-        <IconBtn icon="plus" label={`Add note to ${weekday(d)}`} onClick={() => app.push('addToPlan', { date: key })} />
+        <IconBtn icon="plus" label={`Add to ${weekday(d)}`} className="accent" onClick={() => setAdding(true)} />
       </header>
+      {adding && (
+        <Sheet title={weekday(d)} onClose={() => setAdding(false)}>
+          <div className="menu">
+            <button onClick={() => { setAdding(false); addRecipes() }}><Icon name="book" />Add recipes</button>
+            <button onClick={() => { setAdding(false); app.push('addToPlan', { date: key }) }}><Icon name="edit" />Something else</button>
+          </div>
+        </Sheet>
+      )}
       {list.length > 1
         ? <DragList className="plain bare" items={list} itemClass="meal" labelOf={(m) => m.title} onReorder={(next) => saveItems(next.map((m, n) => ({ ...m, ord: n })))} renderItem={mealRow} />
         : list.map((m) => <div className="meal" key={m.id}>{mealRow(m)}</div>)}
@@ -51,7 +64,8 @@ export default function Planner() {
   const settings = useSettings()
   const view = settings.planView === 'month' ? 'month' : 'week'
   const { meals, byDay } = useMealsByDay()
-  const [start, setStart] = useState(() => startOfWeek(new Date()))
+  const first = weekStartDay(settings)
+  const [start, setStart] = useState(() => startOfWeek(new Date(), weekStartDay(getSettings())))
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const [picked, setPicked] = useState(today())
   const [menu, setMenu] = useState(false)
@@ -60,12 +74,13 @@ export default function Planner() {
   const week = days.flatMap((d) => byDay.get(fmtDate(d)) || [])
   const weekRecipeIds = [...new Set(week.map((m) => m.recipeId).filter(live))]
   const range = `${short(days[0])} – ${short(days[6])}`
+  useEffect(() => { setStart((p) => startOfWeek(p, first)) }, [first])
   const move = (n) => {
     setDir(n)
-    if (view === 'week') setStart(n === 0 ? startOfWeek(new Date()) : addDays(start, n * 7))
+    if (view === 'week') setStart(n === 0 ? startOfWeek(new Date(), first) : addDays(start, n * 7))
     else { const m = n === 0 ? startOfMonth(new Date()) : new Date(month.getFullYear(), month.getMonth() + n, 1, 12); setMonth(m); if (n === 0) setPicked(today()) }
   }
-  const cells = useMemo(() => { const first = startOfWeek(month); const all = Array.from({ length: 42 }, (_, i) => addDays(first, i)); return all[35].getMonth() === month.getMonth() ? all : all.slice(0, 35) }, [month])
+  const cells = useMemo(() => { const first0 = startOfWeek(month, first); const all = Array.from({ length: 42 }, (_, i) => addDays(first0, i)); return all[35].getMonth() === month.getMonth() ? all : all.slice(0, 35) }, [month, first])
   const pickedDate = noon(picked + 'T12:00')
   const toGroceries = () => app.push('addToGroceries', { recipeIds: weekRecipeIds })
 
@@ -92,7 +107,7 @@ export default function Planner() {
       ) : (
         <div className={`week slide${dir}`} key={fmtDate(month)}>
           <div className="month" role="grid">
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((w, i) => <span key={i} className="month-w">{w}</span>)}
+            {Array.from({ length: 7 }, (_, i) => DOW[(first + i) % 7][0]).map((w, i) => <span key={i} className="month-w">{w}</span>)}
             {cells.map((d) => { const key = fmtDate(d); const list = byDay.get(key) || []; return (
               <button key={key} className={`month-d ${d.getMonth() !== month.getMonth() ? 'dim' : ''} ${key === today() ? 'today' : ''} ${key === picked ? 'on' : ''}`} onClick={() => setPicked(key)} aria-label={`${weekday(d)} ${short(d)}, ${list.length} planned`}>
                 <b>{d.getDate()}</b>
