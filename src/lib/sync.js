@@ -23,7 +23,11 @@ export const onSyncStatus = (f) => { subs.add(f); return () => subs.delete(f) }
 
 export async function session() { const c = sb(); if (!c) return null; return (await c.auth.getSession()).data.session }
 export async function signIn(email, password) { const { error } = await sb().auth.signInWithPassword({ email, password }); if (error) throw error; await rememberMe(); await findHousehold() }
-export async function signUp(email, password) { const { data, error } = await sb().auth.signUp({ email, password }); if (error) throw error; if (data.session) await rememberMe(); return !!data.session }
+// The confirmation email builds its link from the project's Site URL, which defaults to
+// localhost:3000 — a dead end on a phone. Say where we actually live, so the link comes back
+// here. The address has to be on the project's Redirect URLs allow-list to be honoured.
+export const siteUrl = () => `${location.origin}${location.pathname}`
+export async function signUp(email, password) { const { data, error } = await sb().auth.signUp({ email, password, options: { emailRedirectTo: siteUrl() } }); if (error) throw error; if (data.session) await rememberMe(); return !!data.session }
 
 /**
  * The food log is per person, so the device needs to know who is using it. Anything logged
