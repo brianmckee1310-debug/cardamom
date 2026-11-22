@@ -511,4 +511,7 @@ button.twist { width: 30px; height: 34px; border-radius: 8px; color: var(--muted
 .hf-done { margin-top: 4px; min-height: 48px; }
 .switchrow { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 44px; }
 .switchrow input { width: 22px; height: 22px; flex: 0 0 auto; }
+/* This subtitle is the instructions, so it wraps rather than trailing off in an ellipsis. */
+.switchrow .row-text { display: grid; gap: 3px; }
+.switchrow .row-text small { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.4; }
 @media (prefers-reduced-motion: reduce) { .hf, .hf-orb, .hf-ring, .hf-added li { animation: none !important; transition: none !important; } }
