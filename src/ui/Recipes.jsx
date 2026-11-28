@@ -54,7 +54,7 @@ export default function Recipes() {
   const [cat, setCat] = useState('all')
   const [picking, setPicking] = useState(false)
   const [limit, setLimit] = useState(60)
-  const sort = settings.sort || 'name'
+  const sort = SORTS.some((s) => s[0] === settings.sort) ? settings.sort : 'name' // a sort saved by an older version must not crash the library
   const shown = useMemo(() => {
     let list = recipes
     if (cat === 'fav') list = list.filter((r) => r.favorite)

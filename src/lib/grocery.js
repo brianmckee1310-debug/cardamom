@@ -16,7 +16,10 @@ export function mergeQty(a, b) {
   a = String(a || '').trim(); b = String(b || '').trim()
   if (!a || !b) return a || b
   const pa = parseIngredient(a + ' x'), pb = parseIngredient(b + ' x')
-  const unitOf = (t) => t.replace(NUM, '').trim().toLowerCase().replace(/\.$/, '').replace(/(es|s)$/, '')
+  // singular() rather than a bare /(es|s)$/: that stripped two letters from anything ending
+  // in "es", so "cloves" became "clov" while "clove" stayed whole and the two never matched —
+  // which is why "1 clove garlic" and "2 cloves garlic" came out as "1 clove + 2 cloves".
+  const unitOf = (t) => singular(t.replace(NUM, '').trim().toLowerCase().replace(/\.$/, ''))
   if (pa.qty != null && pb.qty != null && pa.qty2 == null && pb.qty2 == null && (pa.unit || '') === (pb.unit || '') && unitOf(a) === unitOf(b)) {
     const sum = pa.qty + pb.qty
     let unit = a.replace(NUM, '').trim() || b.replace(NUM, '').trim()

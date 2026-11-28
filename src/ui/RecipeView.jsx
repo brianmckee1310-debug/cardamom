@@ -99,14 +99,15 @@ export default function RecipeView({ id }) {
         <button className="btn" onClick={() => app.push('addToPlan', { recipeId: id })}><Icon name="calendar" size={18} />Plan</button>
       </footer>}>
       <article className="recipe-body">
-        {hero && <button className="hero" onClick={() => setGallery(true)} aria-label="View photos"><img src={hero} alt="" />{(r.photos || []).length > 1 && <span className="pill">{r.photos.length} photos</span>}</button>}
-        <div className="recipe-head">
-          <h1>{r.name}</h1>
-          <div className="recipe-sub"><Stars value={r.rating} onChange={(v) => set({ rating: v })} size={20} />{r.source && (r.source_url ? <a href={r.source_url} target="_blank" rel="noreferrer">{r.source}</a> : <span>{r.source}</span>)}</div>
-          <dl className="facts">
-            {[['Prep', r.prep_time], ['Cook', r.cook_time], ['Total', r.total_time], ['Serves', servingsText], ['Difficulty', r.difficulty]].filter((x) => x[1]).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
-          </dl>
-          {(r.categories || []).length > 0 && <div className="chips">{r.categories.map((c) => <span className="chip" key={c}>{c}</span>)}</div>}
+        <div className="recipe-top">
+          {hero && <button className="hero" onClick={() => setGallery(true)} aria-label="View photos"><img src={hero} alt="" />{(r.photos || []).length > 1 && <span className="pill">{r.photos.length}</span>}</button>}
+          <div className="recipe-head">
+            <h1>{r.name}</h1>
+            <div className="recipe-sub"><Stars value={r.rating} onChange={(v) => set({ rating: v })} size={18} />{r.source && (r.source_url ? <a href={r.source_url} target="_blank" rel="noreferrer">{r.source}</a> : <span>{r.source}</span>)}</div>
+            <p className="facts-line">
+              {[['Prep', r.prep_time], ['Cook', r.cook_time], ['Total', r.total_time], ['Serves', servingsText], ['', r.difficulty], ...(r.categories || []).map((c) => ['', c])].filter((x) => x[1]).map(([k, v], i) => <span key={k + v + i}>{k && <b>{k}</b>}{v}</span>)}
+            </p>
+          </div>
         </div>
         {busy && <Busy label={busy} />}
         {r.description && <p className="desc">{r.description}</p>}
@@ -117,11 +118,11 @@ export default function RecipeView({ id }) {
               <button className={pane === 'steps' ? 'on' : ''} onClick={() => swap('steps')}>Directions</button>
               {hasMore && <button className={pane === 'more' ? 'on' : ''} onClick={() => swap('more')}>More</button>}
             </div>
+            {pane === 'ings' && <button className={`pillbtn slim ${factor !== 1 || system !== 'original' ? 'on' : ''}`} onClick={() => setScaling(true)}><Icon name="scale" size={14} />{factor !== 1 ? `${formatNumber(factor)}\u00d7` : 'Scale'}{system !== 'original' ? ` \u00b7 ${system === 'metric' ? 'Metric' : 'US'}` : ''}</button>}
           </div>
         )}
         <div className="cols">
           <section className="ingredients" hidden={pane !== 'ings'}>
-            <div className="sec-head"><h2>Ingredients</h2><button className={`pillbtn ${factor !== 1 || system !== 'original' ? 'on' : ''}`} onClick={() => setScaling(true)}><Icon name="scale" size={15} />{factor !== 1 ? `${formatNumber(factor)}×` : 'Scale'}{system !== 'original' ? ` · ${system === 'metric' ? 'Metric' : 'US'}` : ''}</button></div>
             <ul className="ings">
               {ings.map((l, i) => isHeader(l) ? <li key={i} className="ing-head">{l.replace(/^#+\s*|\*\*/g, '')}</li> : (
                 <li key={i} className={done.has(i) ? 'done' : ''}><button onClick={() => { done.has(i) ? done.delete(i) : done.add(i); force((x) => x + 1) }}>{scaledIngs[i]}</button></li>
@@ -130,10 +131,9 @@ export default function RecipeView({ id }) {
             </ul>
           </section>
           <section className="directions" hidden={pane !== 'steps'}>
-            <div className="sec-head"><h2>Directions</h2></div>
             <ol className="steps">
               {steps.map((s, i) => isHeader(s) ? <li key={i} className="ing-head">{s}</li> : (
-                <li key={i} className={step === i ? 'current' : ''} onClick={() => { stepAt.set(id, step === i ? -1 : i); force((x) => x + 1) }}><span className="step-n">{stepNums[i]}</span><p><StepText text={scaledSteps[i]} onTimer={app.startTimer} /></p></li>
+                <li key={i} className={step === i ? 'current' : ''} onClick={(e) => { const pick = step !== i; stepAt.set(id, pick ? i : -1); force((x) => x + 1); if (pick) { const el = e.currentTarget; requestAnimationFrame(() => el.scrollIntoView({ block: 'start', behavior: 'smooth' })) } }}><span className="step-n">{stepNums[i]}</span><p><StepText text={scaledSteps[i]} onTimer={app.startTimer} /></p></li>
               ))}
               {!steps.length && <li className="muted">No directions listed.</li>}
             </ol>

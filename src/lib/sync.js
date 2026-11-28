@@ -50,7 +50,7 @@ export async function findHousehold() {
   return h
 }
 export async function createHousehold(name) { const { error } = await sb().rpc('cardamom_create_household', { p_name: name }); if (error) throw error; return findHousehold() }
-export async function joinHousehold(code) { const { error } = await sb().rpc('cardamom_join_household', { p_code: code.trim().toUpperCase() }); if (error) throw error; await setSetting('cursor', null); return findHousehold() }
+export async function joinHousehold(code) { const { error } = await sb().rpc('cardamom_join_household', { p_code: code.trim().toUpperCase() }); if (error) throw error; await setSetting('cursor', null); await setSetting('cursorId', null); return findHousehold() }
 
 const strip = ({ dirty, u, ...data }) => data
 let running = null, again = false
@@ -72,13 +72,23 @@ async function run() {
       const { data, error } = await c.from('cardamom_items').upsert(rows).select('id, updated_at')
       if (error) throw error
       // only mark clean if the record was not edited again while uploading
-      const ok = data.filter((r) => getItem(r.id)?.u === dirty.find((d) => d.id === r.id).u)
+      const ok = data.filter((r) => { const sent = dirty.find((d) => d.id === r.id); return sent && getItem(r.id)?.u === sent.u })
       await markClean(ok.map((r) => r.id), Object.fromEntries(ok.map((r) => [r.id, r.updated_at])))
     }
     // 2. pull
+    //
+    // The cursor is (updated_at, id), not updated_at alone. A batch upsert gives every row in
+    // it the same transaction timestamp -- importing a Paprika library writes a hundred
+    // recipes stamped to the microsecond -- so a page that ended in the middle of such a group
+    // and then asked for "> that timestamp" silently skipped the rest of the group. Those
+    // recipes never arrived on the other phone and nothing reported a problem. Ordering by id
+    // as well makes the page boundary a real position rather than a guess.
     let cursor = getSettings().cursor || '1970-01-01T00:00:00Z'
+    let afterId = getSettings().cursorId || ''
     for (;;) {
-      const { data, error } = await c.from('cardamom_items').select('id, kind, data, deleted, updated_at').eq('household_id', h.id).gt('updated_at', cursor).order('updated_at').limit(300)
+      let q = c.from('cardamom_items').select('id, kind, data, deleted, updated_at').eq('household_id', h.id)
+      q = afterId ? q.or(`updated_at.gt.${cursor},and(updated_at.eq.${cursor},id.gt.${afterId})`) : q.gt('updated_at', cursor)
+      const { data, error } = await q.order('updated_at').order('id').limit(300)
       if (error) throw error
       if (!data.length) break
       const incoming = data.filter((r) => !getItem(r.id)?.dirty).map((r) => ({ ...r.data, id: r.id, kind: r.kind, deleted: r.deleted, u: r.updated_at }))
@@ -88,8 +98,10 @@ async function run() {
         if (cur && r.kind === 'recipe' && (cur.pv || 0) !== (r.pv || 0)) for (const idx of cur.photos || []) await deletePhoto(`${r.id}:${idx}`)
       }
       if (incoming.length) await saveItems(incoming, { fromSync: true })
-      cursor = data[data.length - 1].updated_at
+      const last = data[data.length - 1]
+      cursor = last.updated_at; afterId = last.id
       await setSetting('cursor', cursor)
+      await setSetting('cursorId', afterId)
       if (data.length < 300) break
     }
     set({ state: 'ok', last: new Date(), message: '' })

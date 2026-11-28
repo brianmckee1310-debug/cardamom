@@ -47,10 +47,23 @@ function saveError(e) {
 function fail(e) { state.error = saveError(e); bump(); throw e }
 export const clearError = () => { state.error = null; bump(new Set()) }
 
+/**
+ * A recipe's categories must be a list. A hand-edited export, a half-written sync row or an
+ * older import can leave a bare string there, and every screen that maps over it then throws
+ * -- which used to take the whole app down. Fixing the shape once, as records come in, beats
+ * guarding a dozen call sites.
+ */
+export function tidy(it) {
+  if (!it || it.kind !== 'recipe') return it
+  const c = it.categories
+  if (c == null || Array.isArray(c)) return it
+  return { ...it, categories: typeof c === 'string' ? c.split(',').map((x) => x.trim()).filter(Boolean) : [] }
+}
+
 export async function loadAll() {
   const db = await dbp
   const [items, keys, vals] = await Promise.all([db.getAll('items'), db.getAllKeys('kv'), db.getAll('kv')])
-  state.items = new Map(items.map((i) => [i.id, i]))
+  state.items = new Map(items.map((i) => [i.id, tidy(i)]))
   state.settings = Object.fromEntries(keys.map((k, i) => [k, vals[i]]))
   state.ready = true
   bump()
@@ -80,7 +93,7 @@ export async function saveItems(list, { fromSync = false } = {}) {
   const tx = db.transaction('items', 'readwrite')
   const saved = []
   for (const it of list) {
-    const rec = fromSync ? { ...it, dirty: 0 } : { ...it, id: it.id || uid(), u: now(), dirty: 1 }
+    const rec = tidy(fromSync ? { ...it, dirty: 0 } : { ...it, id: it.id || uid(), u: now(), dirty: 1 })
     const was = state.items.get(rec.id)
     if (was && was.kind !== rec.kind) cache.delete(was.kind)
     state.items.set(rec.id, rec); tx.store.put(rec); saved.push(rec)
@@ -264,9 +277,9 @@ export async function shrinkImage(blob, max = 1600, quality = 0.84) {
 export async function wipeAll() {
   const db = await dbp
   await Promise.all([db.clear('items'), db.clear('photos')])
-  for (const k of ['cursor']) await db.delete('kv', k)
+  for (const k of ['cursor', 'cursorId']) await db.delete('kv', k)
   for (const id of [...urls.keys(), ...thumbs.keys()]) dropUrl(id)
-  state.items = new Map(); delete state.settings.cursor; bump()
+  state.items = new Map(); delete state.settings.cursor; delete state.settings.cursorId; bump()
 }
 
 export function allCategories() {

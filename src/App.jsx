@@ -15,6 +15,7 @@ import { RecipePicker, AddToGroceries, AddToPlan, ItemEdit, AddToMenu } from './
 import { firstUrl } from './lib/importers.js'
 import VoiceButton, { HandsFree } from './ui/Voice.jsx'
 import { guessMeal } from './lib/log.js'
+import Boom from './ui/Boom.jsx'
 
 // Split out of the first load: Import pulls in the zip reader, More pulls in the Supabase
 // client, Barcode pulls in the camera decoder. None of them is needed to show the library.
@@ -29,11 +30,25 @@ const VIEWS = { recipe: RecipeView, edit: RecipeEdit, cook: CookMode, import: Im
 const TAB_COMPONENTS = { recipes: Recipes, log: FoodLog, groceries: Grocery, planner: Planner, pantry: Pantry, more: More }
 const fmt = (s) => { s = Math.max(0, Math.ceil(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0') }
 
-function beep() {
+// A phone will not let a page make a sound from an AudioContext that was first opened away
+// from a tap, and a browser only allows a handful of contexts per page before refusing more.
+// A timer goes off minutes after the tap that started it, so opening one then would be both
+// silent and, by the sixth timer of the evening, impossible. One context, opened and woken on
+// the tap that starts the timer, and kept for the life of the app.
+let actx = null
+function wakeAudio() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)()
+    if (actx.state === 'suspended') actx.resume().catch(() => {})
+  } catch { actx = null }
+  return actx
+}
+function beep() {
+  navigator.vibrate?.([300, 150, 300, 150, 600])
+  try {
+    const ctx = wakeAudio()
+    if (!ctx || ctx.state !== 'running') return
     ;[0, 0.35, 0.7, 1.4, 1.75, 2.1].forEach((t) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = 880; o.connect(g); g.connect(ctx.destination); g.gain.setValueAtTime(0.0001, ctx.currentTime + t); g.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime + t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.28); o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.3) })
-    navigator.vibrate?.([300, 150, 300, 150, 600])
   } catch { /* no audio */ }
 }
 
@@ -61,6 +76,7 @@ export default function App() {
   const removed = useCallback((label, ids) => toast(label, { undo: async () => { for (const id of [].concat(ids)) await restoreItem(id) } }), [toast])
 
   const startTimer = useCallback((seconds, label) => {
+    wakeAudio() // this call is inside the tap that started the timer, which is the only moment sound can be unlocked
     setTimers((t) => [...t, { id: seq.current++, label, end: Date.now() + seconds * 1000, total: seconds }])
     if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {})
     toast(`Timer started: ${label}`)
@@ -69,10 +85,14 @@ export default function App() {
     if (!timers.length) return
     const i = setInterval(() => {
       setTick((x) => x + 1)
-      setTimers((ts) => ts.map((t) => {
-        if (!t.done && Date.now() >= t.end) { beep(); try { if (Notification.permission === 'granted') navigator.serviceWorker?.ready.then((r) => r.showNotification('Timer done', { body: t.label, tag: 't' + t.id })) } catch { /* ignore */ } return { ...t, done: true } }
-        return t
-      }))
+      setTimers((ts) => {
+        const rung = ts.filter((t) => !t.done && Date.now() >= t.end)
+        if (!rung.length) return ts
+        // Ringing is a side effect, so it happens once here rather than inside the map below,
+        // which React is free to run more than once.
+        queueMicrotask(() => { beep(); for (const t of rung) { try { if (Notification.permission === 'granted') navigator.serviceWorker?.ready.then((r) => r.showNotification('Timer done', { body: t.label, tag: 't' + t.id })) } catch { /* ignore */ } } })
+        return ts.map((t) => (rung.includes(t) ? { ...t, done: true } : t))
+      })
     }, 500)
     return () => clearInterval(i)
   }, [timers.length])
@@ -136,7 +156,7 @@ export default function App() {
             <button key={id} className={tab === id ? 'on' : ''} onClick={() => { setTab(id); if (stack.length) { history.go(-stack.length); setStack([]) } }} aria-current={tab === id ? 'page' : undefined}><Icon name={icon} /><span>{label}</span></button>
           ))}
         </nav>
-        <main className="tabpane" key={tab}><Suspense fallback={<div className="boot"><span className="spinner" /></div>}>{pane}</Suspense></main>
+        <main className="tabpane" key={tab}><Boom where={tab} key={tab}><Suspense fallback={<div className="boot"><span className="spinner" /></div>}>{pane}</Suspense></Boom></main>
         {timers.length > 0 && (
           <div className="timers">
             {timers.map((t) => (
@@ -147,7 +167,7 @@ export default function App() {
             ))}
           </div>
         )}
-        <Suspense fallback={null}>{stack.map((s) => { const V = VIEWS[s.type]; return V ? <V key={s.key} {...s.props} /> : null })}</Suspense>
+        <Suspense fallback={null}>{stack.map((s) => { const V = VIEWS[s.type]; return V ? <Boom key={s.key} where={s.type} reset={back} overlay><V {...s.props} /></Boom> : null })}</Suspense>
         <VoiceButton hidden={['cook', 'weekGlance'].includes(stack[stack.length - 1]?.type) || (tab === 'recipes' && !stack.length)} />
         {handsFree && <HandsFree onClose={() => setHandsFree(false)} />}
         <div className="toasts" aria-live="polite">

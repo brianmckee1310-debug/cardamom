@@ -148,10 +148,7 @@ export function ItemEdit({ item }) {
   return (
     <Sheet title={item.id ? 'Edit item' : 'New item'} onClose={app.back}>
       <Field label="Name"><input value={x.name} onChange={up('name')} autoFocus={!item.id} /></Field>
-      <div className="grid2">
-        <Field label="Amount"><input value={x.qty || ''} onChange={up('qty')} /></Field>
-        
-      </div>
+      <Field label="Amount"><input value={x.qty || ''} onChange={up('qty')} /></Field>
       {!pantry && <Field label="Aisle"><select value={x.aisle || 'Other'} onChange={up('aisle')}>{aisleList(getSettings()).map((a) => <option key={a}>{a}</option>)}</select></Field>}
       {!pantry && lists.length > 0 && <Field label="List"><select value={x.list || ''} onChange={(e) => setX((v) => ({ ...v, list: e.target.value || undefined }))}><option value="">Groceries</option>{lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></Field>}
       {pantry && <Field label="Use by"><input type="date" value={x.expires || ''} onChange={up('expires')} /></Field>}

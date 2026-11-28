@@ -333,6 +333,62 @@ confirmations and the twelve-second silence timeout are untested end to end. Tha
 thing to try, and the most likely place for something to be wrong.
 Nothing has been tried on a real phone at all, and still no account, household or token exists.
 
+## Phase 15 — pre-flight before the first real cook (done 2026-11-27, Opus 5 low/medium)
+
+Two things in one pass: the recipe page was wasting the screen, and the app had never been
+read end to end looking for what could go wrong with two people using it at once.
+
+### Density on the recipe page (done)
+The header was taking a thousand pixels before the first ingredient. The photo is now a 92px
+thumbnail beside the title, prep/cook/serves/difficulty/categories collapse to one quiet line,
+and the repeated "Ingredients"/"Directions" headings are gone — the tab already says it. The
+Scale button moved into the sticky tab row. Sixteen ingredients now fit on one phone screen
+where six did before. Tapping a direction scrolls it to the top, clear of the sticky tabs.
+
+### Bugs found and fixed (done)
+1. **The timer could not make a sound.** The AudioContext was opened at the moment the timer
+   went off, which is minutes away from the tap that started it — phones refuse to play audio
+   from a context first opened away from a gesture, and only allow a handful of contexts per
+   page before refusing outright. One context now, opened on the tap. *This is the one to
+   test first on a real phone: start a one-minute timer and listen.*
+2. **"1 clove + 2 cloves" instead of "3 cloves."** The unit comparison stripped two letters
+   from anything ending in "es", so "cloves" became "clov" while "clove" stayed whole and the
+   two never matched. Hit cloves, slices, ounces, pieces and packages — garlic especially.
+3. **Sync could silently skip recipes.** The pull cursor was a timestamp alone, but a batch
+   upsert stamps every row in it identically — importing a Paprika library writes a hundred
+   recipes to the same microsecond. A page ending inside such a group then asked for
+   "later than that timestamp" and skipped the rest. Those recipes never reached the other
+   phone and nothing reported a problem. The cursor is now (updated_at, id).
+4. **No error boundary anywhere.** One bad record turned the whole app into a white screen.
+   There are now three: around the app, around each tab, and around each overlay, with a
+   "go back" that recovers without losing anything.
+5. **A recipe whose categories arrived as a string crashed every screen showing it.** Shapes
+   are now tidied as records enter the store, so a bad import cannot take a screen down.
+6. An unknown saved sort value crashed the library; a stray row from the server could throw
+   mid-push; the item editor had an empty half-column leaving a gap.
+
+### Checked
+128 unit tests (6 new pinning the merge and the record tidying). A scripted phone-sized browser
+walk: write a recipe, tab to directions, tap step 7 and watch it scroll clear of the tab bar,
+cook mode through four steps with the timer chip appearing on the right one, add to groceries,
+and the three merged lines coming out as "3 cloves", "4 slices", "3 cups". A deliberately
+corrupt record was opened to confirm the boundary catches it and "go back" recovers. All six
+tabs render with no console errors. Screenshots looked at in light and dark.
+
+### Not verified — try these first on Sunday
+- **The timer sound on a real phone.** Fixed blind; headless Chrome cannot prove it. Start a
+  one-minute timer, lock the phone, and listen. Vibration is the fallback if sound fails.
+- **Sync between two phones.** The cursor fix is reasoned and reviewed, not run against two
+  real devices. Worth adding a recipe on one phone and watching it land on the other before
+  you rely on it mid-cook.
+- Anything needing the camera, the microphone or the Gemini key.
+- The new layout on a real Galaxy screen rather than an emulated 412px one.
+
+### Later
+- Order the pull by (updated_at, id) on the server side with an index, if sync ever feels slow.
+- The service worker still serves a stale lazy chunk after a deploy mid-session; the boundary
+  now explains it and offers a reload, but a version check would be cleaner.
+
 ## Older notes — checked on 2026-11-15
 - 60 unit tests pass (51 from before, plus 9 new covering typed amounts, the stepper ladder,
   bounds and junk input, scaling a line by a typed factor, and the portion wording).
